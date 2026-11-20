@@ -45,6 +45,11 @@ export default defineConfig([
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
   {
+    // Route tables legitimately export data next to small wrapper components.
+    files: ['src/app/router.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
     files: ['src/domain/**/*.ts'],
     rules: {
       'no-restricted-imports': [

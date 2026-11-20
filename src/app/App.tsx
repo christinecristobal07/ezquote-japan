@@ -1,15 +1,24 @@
-import { SupabaseStatusBadge } from '@/features/system/SupabaseStatusBadge';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from 'react-router';
+import { AuthProvider } from '@/features/auth/AuthProvider';
+import { router } from '@/app/router';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 60_000,
+    },
+  },
+});
 
 export function App() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-brand-600 text-sm font-medium tracking-wide uppercase">
-          Gladex Travel &amp; Tours
-        </p>
-        <h1 className="text-brand-900 mt-1 text-2xl font-semibold">EZQUOTE Japan</h1>
-        <SupabaseStatusBadge />
-      </div>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

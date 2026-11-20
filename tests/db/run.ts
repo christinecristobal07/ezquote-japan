@@ -255,6 +255,17 @@ async function main(): Promise<void> {
     });
   });
 
+  await check('authenticated actually holds SELECT on profiles (not just a policy)', async () => {
+    // Without the GRANT, PostgREST answers 403 before any policy is consulted.
+    const granted = await count(
+      db,
+      `select count(*)::int as n from information_schema.role_table_grants
+       where table_schema = 'public' and table_name = 'profiles'
+         and grantee = 'authenticated' and privilege_type = 'SELECT'`,
+    );
+    assertEqual(granted, 1, 'SELECT grants on profiles for authenticated');
+  });
+
   await check('an agent sees only their own profile', async () => {
     await asUser(db, ids.agentAuth, async () => {
       const rows = await count(db, `select count(*)::int as n from public.profiles`);

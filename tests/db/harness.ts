@@ -11,6 +11,7 @@ const MIGRATIONS = [
   '20261120100000_core_schema.sql',
   '20261120100100_functions_triggers.sql',
   '20261120100200_rls_policies.sql',
+  '20261120110000_grant_api_roles.sql',
 ];
 
 /**
@@ -35,13 +36,6 @@ $fn$;
 grant usage on schema auth to anon, authenticated;
 `;
 
-/** Supabase grants the API roles blanket access; RLS is what actually gates it. */
-const GRANTS = `
-grant usage on schema public to anon, authenticated;
-grant all on all tables in schema public to anon, authenticated;
-grant all on all sequences in schema public to anon, authenticated;
-`;
-
 export type Db = PGlite;
 
 /** Set by createTestDb so assertRejects can guard statements with a savepoint. */
@@ -51,9 +45,10 @@ export async function createTestDb(): Promise<Db> {
   const db = await PGlite.create({ extensions: { btree_gist } });
   current = db;
   await db.exec(STUB);
-  await db.exec(readFileSync(resolve(MIGRATIONS_DIR, MIGRATIONS[0]!), 'utf8'));
-  await db.exec(GRANTS);
-  for (const file of MIGRATIONS.slice(1)) {
+  // No stand-in grants here on purpose. The migrations must grant the API roles
+  // everything they need, or this suite would pass against privileges that the
+  // real database does not have.
+  for (const file of MIGRATIONS) {
     await db.exec(readFileSync(resolve(MIGRATIONS_DIR, file), 'utf8'));
   }
   return db;
