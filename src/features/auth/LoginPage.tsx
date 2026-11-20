@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AppAuthError, signInWithPassword } from '@/data/repositories/authRepository';
-import { AuthCard, Field, FormError, SubmitButton } from '@/components/ui/Form';
+import { Button, Field, Input } from '@/components/ui';
+import { AuthCard, FormError } from './AuthCard';
 import { safeRedirectTo } from '@/app/guards/redirectTo';
 
 export function LoginPage() {
@@ -38,31 +39,35 @@ export function LoginPage() {
         noValidate
       >
         {error !== null && <FormError>{error}</FormError>}
-        <Field
-          label="Email"
-          type="email"
-          name="email"
-          autoComplete="username"
-          required
-          disabled={busy}
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-          }}
-        />
-        <Field
-          label="Password"
-          type="password"
-          name="password"
-          autoComplete="current-password"
-          required
-          disabled={busy}
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-          }}
-        />
-        <SubmitButton busy={busy}>Sign in</SubmitButton>
+        <Field label="Email">
+          <Input
+            type="email"
+            name="email"
+            autoComplete="username"
+            required
+            disabled={busy}
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+            }}
+          />
+        </Field>
+        <Field label="Password">
+          <Input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            disabled={busy}
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+            }}
+          />
+        </Field>
+        <Button type="submit" loading={busy} className="w-full">
+          Sign in
+        </Button>
       </form>
       <p className="mt-4 text-sm text-slate-600">
         <Link to="/forgot-password" className="text-brand-600 hover:underline">

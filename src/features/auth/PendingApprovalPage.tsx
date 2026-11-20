@@ -1,4 +1,4 @@
-import { AuthCard } from '@/components/ui/Form';
+import { AuthCard } from './AuthCard';
 import { useAuth } from './useAuth';
 
 /**

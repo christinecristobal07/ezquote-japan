@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { sendPasswordReset } from '@/data/repositories/authRepository';
-import { AuthCard, Field, FormNotice, SubmitButton } from '@/components/ui/Form';
+import { Button, Field, Input } from '@/components/ui';
+import { AuthCard, FormNotice } from './AuthCard';
 
 /**
  * The confirmation is identical whether or not the address exists, so this page
@@ -39,19 +40,22 @@ export function ForgotPasswordPage() {
           className="space-y-4"
           noValidate
         >
-          <Field
-            label="Email"
-            type="email"
-            name="email"
-            autoComplete="username"
-            required
-            disabled={busy}
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-            }}
-          />
-          <SubmitButton busy={busy}>Send reset link</SubmitButton>
+          <Field label="Email">
+            <Input
+              type="email"
+              name="email"
+              autoComplete="username"
+              required
+              disabled={busy}
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+              }}
+            />
+          </Field>
+          <Button type="submit" loading={busy} className="w-full">
+            Send reset link
+          </Button>
         </form>
       )}
       <p className="mt-4 text-sm text-slate-600">

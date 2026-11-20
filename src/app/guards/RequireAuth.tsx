@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { FullPageSpinner } from '@/components/ui/Form';
+import { FullPageSpinner } from '@/components/ui';
 import { PendingApprovalPage } from '@/features/auth/PendingApprovalPage';
 import { useAuth } from '@/features/auth/useAuth';
 

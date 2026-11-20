@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { AppAuthError, updatePassword } from '@/data/repositories/authRepository';
-import { AuthCard, Field, FormError, SubmitButton } from '@/components/ui/Form';
+import { Button, Field, Input } from '@/components/ui';
+import { AuthCard, FormError } from './AuthCard';
 import { MIN_PASSWORD_LENGTH, PASSWORD_RULES, validatePassword } from './password';
 import { useAuth } from './useAuth';
 
@@ -73,16 +74,6 @@ export function SetPasswordPage() {
         {error !== null && <FormError>{error}</FormError>}
         <Field
           label="New password"
-          type="password"
-          name="password"
-          autoComplete="new-password"
-          required
-          minLength={MIN_PASSWORD_LENGTH}
-          disabled={busy}
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-          }}
           hint={
             <ul className="list-inside list-disc">
               {PASSWORD_RULES.map((rule) => (
@@ -90,20 +81,36 @@ export function SetPasswordPage() {
               ))}
             </ul>
           }
-        />
-        <Field
-          label="Confirm password"
-          type="password"
-          name="confirmation"
-          autoComplete="new-password"
-          required
-          disabled={busy}
-          value={confirmation}
-          onChange={(e) => {
-            setConfirmation(e.target.value);
-          }}
-        />
-        <SubmitButton busy={busy}>Save password</SubmitButton>
+        >
+          <Input
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            required
+            minLength={MIN_PASSWORD_LENGTH}
+            disabled={busy}
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+            }}
+          />
+        </Field>
+        <Field label="Confirm password">
+          <Input
+            type="password"
+            name="confirmation"
+            autoComplete="new-password"
+            required
+            disabled={busy}
+            value={confirmation}
+            onChange={(event) => {
+              setConfirmation(event.target.value);
+            }}
+          />
+        </Field>
+        <Button type="submit" loading={busy} className="w-full">
+          Save password
+        </Button>
       </form>
     </AuthCard>
   );

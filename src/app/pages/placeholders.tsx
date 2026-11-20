@@ -1,70 +1,93 @@
-import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { useAuth } from '@/features/auth/useAuth';
+import { Card, EmptyState, PageHeader } from '@/components/ui';
 
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin',
-  product_development: 'Product Development',
-  admin: 'Admin',
-  sales_supervisor: 'Sales Supervisor',
-  sales_agent: 'Sales Agent',
-};
-
-function Shell({ title, children }: { title: string; children?: ReactNode }) {
+function Placeholder({
+  title,
+  description,
+  step,
+}: {
+  title: string;
+  description: string;
+  step: number;
+}) {
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-brand-900 text-2xl font-semibold">{title}</h1>
-      <div className="mt-4 text-slate-600">{children}</div>
-      <Link to="/" className="text-brand-600 mt-8 inline-block text-sm hover:underline">
-        Back to the dashboard
-      </Link>
-    </main>
-  );
-}
-
-/** Replaced by the real dashboard and layout in the next step. */
-export function HomePage() {
-  const { profile, signOut } = useAuth();
-
-  return (
-    <main className="mx-auto max-w-3xl p-6">
-      <p className="text-brand-600 text-sm font-medium tracking-wide uppercase">
-        Gladex Travel &amp; Tours
-      </p>
-      <h1 className="text-brand-900 mt-1 text-2xl font-semibold">EZQUOTE Japan</h1>
-      <p className="mt-4 text-slate-700">
-        Signed in as {profile?.fullName ?? 'Unknown'} ·{' '}
-        {profile === null ? 'no role' : (ROLE_LABELS[profile.role] ?? profile.role)}
-      </p>
-      <button
-        type="button"
-        onClick={() => void signOut()}
-        className="mt-6 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        Sign out
-      </button>
-    </main>
+    <>
+      <PageHeader title={title} description={description} />
+      <Card>
+        <EmptyState title="Not built yet" text={`Coming in Step ${String(step)}.`} />
+      </Card>
+    </>
   );
 }
 
 export function QuotationsPage() {
-  return <Shell title="Quotations">Your quotations will appear here.</Shell>;
+  return (
+    <Placeholder
+      title="Quotations"
+      description="Every quotation you can see, newest first."
+      step={11}
+    />
+  );
+}
+
+export function NewQuotationPage() {
+  return (
+    <Placeholder
+      title="New quotation"
+      description="Pick the services, hotels and travellers, then generate the rate."
+      step={11}
+    />
+  );
+}
+
+export function TeamQuotationsPage() {
+  return (
+    <Placeholder
+      title="Team quotations"
+      description="Quotations from the agents who report to you."
+      step={12}
+    />
+  );
 }
 
 export function RatesAdminPage() {
-  return <Shell title="Rates">Rate versions, tiers and add-ons.</Shell>;
+  return (
+    <Placeholder
+      title="Rates & FX"
+      description="Rate versions, group-size tiers, add-ons and exchange rates."
+      step={13}
+    />
+  );
 }
 
 export function ContentAdminPage() {
-  return <Shell title="Content">Inclusions, exclusions, notes and remarks.</Shell>;
+  return (
+    <Placeholder
+      title="Content"
+      description="Inclusions, exclusions, notes, requirements and remarks."
+      step={14}
+    />
+  );
 }
 
 export function AgentsAdminPage() {
-  return <Shell title="Agents">Agent profiles, roles and survey links.</Shell>;
+  return (
+    <Placeholder
+      title="Agents"
+      description="Agent profiles, roles, supervisors and Rate My Service links."
+      step={10}
+    />
+  );
 }
 
 export function AuditPage() {
-  return <Shell title="Audit log">Every important change, with who made it.</Shell>;
+  return (
+    <Placeholder
+      title="Audit log"
+      description="Every important change, with who made it and when."
+      step={15}
+    />
+  );
 }
 
 export function NotFoundPage() {
