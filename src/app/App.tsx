@@ -1,3 +1,5 @@
+import { SupabaseStatusBadge } from '@/features/system/SupabaseStatusBadge';
+
 export function App() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
@@ -6,7 +8,7 @@ export function App() {
           Gladex Travel &amp; Tours
         </p>
         <h1 className="text-brand-900 mt-1 text-2xl font-semibold">EZQUOTE Japan</h1>
-        <p className="mt-4 text-slate-600">Project setup complete. Supabase comes in Step 2.</p>
+        <SupabaseStatusBadge />
       </div>
     </main>
   );

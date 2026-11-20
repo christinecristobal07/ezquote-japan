@@ -17,8 +17,8 @@
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run format:check",
     "db:login": "supabase login",
-    "db:link": "supabase link --project-ref",
-    "db:types": "supabase gen types typescript --remote > src/data/database.types.ts"
+    "db:link": "supabase link",
+    "db:types": "supabase gen types --remote --schema public > src/data/database.types.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",
