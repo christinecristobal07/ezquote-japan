@@ -32,6 +32,14 @@ export default defineConfig([
     },
   },
   {
+    files: ['scripts/**/*.ts'],
+    languageOptions: { globals: globals.node },
+    rules: {
+      'no-console': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['src/domain/**/*.ts'],
     rules: {
       'no-restricted-imports': [

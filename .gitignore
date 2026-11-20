@@ -35,3 +35,7 @@ supabase/.branches
 
 # Test output
 coverage
+# Seed input and output (never commit the workbook or generated SQL)
+scripts/seed/data/*
+!scripts/seed/data/.gitkeep
+scripts/seed/out/
