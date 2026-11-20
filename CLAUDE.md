@@ -22,6 +22,7 @@ Source of truth: the BRD. Where the workbook and the BRD disagree, follow the BR
 - Hotel per person = room cost ÷ divisor × multiplier (quad 4/1, triple 3/1, twin 2/1, solo 1/2 [entered value is per-person twin rate], child 1/1, sneak_in 1/1). Hotel cost is entered per category in Change Rate (kind = 'hotel').
 - Selling rate per person = hotel pp + Σ tours + Σ transfers + category markup + package markup + airfare + non-hotel Change Rate amounts.
 - Markups: fixed PHP or percent. Percent base = hotel + tours + transfers (excludes airfare and Change Rate). Tour markup +1,000, transfer +2,000 (editable). Category markups: quad 2,500, triple 2,600, twin 2,700, solo 3,500, child 2,000, sneak_in 0.
+- Percent markup base = hotel pp + converted operator tour/transfer rates + add-ons; excludes tour/transfer markups, airfare and non-hotel Change Rate.
 - Final rate rounds UP to the next number ending in 99 (13,957 → 13,999; 13,050 → 13,099; already ending in 99 stays).
 - Snapshot: the DB builds quotations.snapshot on insert (FX, markups, all published unexpired rates). Rate/FX changes affect only new quotations. Quotes can only use services in their own snapshot.
 - Change Rate entries are append-only; corrections are exact reversing entries. Every entry audited.

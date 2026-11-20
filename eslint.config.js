@@ -32,12 +32,17 @@ export default defineConfig([
     },
   },
   {
-    files: ['scripts/**/*.ts'],
+    files: ['scripts/**/*.ts', 'tests/**/*.ts'],
     languageOptions: { globals: globals.node },
     rules: {
       'no-console': 'off',
       'react-refresh/only-export-components': 'off',
     },
+  },
+  {
+    // Test code may assert on fixtures it just built.
+    files: ['**/*.test.ts', 'src/domain/__fixtures__/**/*.ts', 'tests/**/*.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
   {
     files: ['src/domain/**/*.ts'],
