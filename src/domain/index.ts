@@ -55,3 +55,5 @@ export {
   type DurationService,
   type DurationWarning,
 } from './duration.ts';
+
+export * from './rates/index.ts';

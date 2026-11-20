@@ -9,6 +9,10 @@ import { SetPasswordPage } from '@/features/auth/SetPasswordPage';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { RouteErrorElement } from '@/app/ErrorBoundary';
 import { DashboardPage } from '@/app/pages/DashboardPage';
+import { RatesListPage } from '@/features/rates/RatesListPage';
+import { ServiceRatePage } from '@/features/rates/ServiceRatePage';
+import { FxPage } from '@/features/rates/FxPage';
+import { MarkupsPage } from '@/features/rates/MarkupsPage';
 import {
   AgentsAdminPage,
   AuditPage,
@@ -16,7 +20,6 @@ import {
   NewQuotationPage,
   NotFoundPage,
   QuotationsPage,
-  RatesAdminPage,
   TeamQuotationsPage,
 } from '@/app/pages/placeholders';
 
@@ -54,7 +57,31 @@ const protectedChildren: RouteObject[] = [
     path: 'admin/rates',
     element: (
       <Guarded permission="rates.manage">
-        <RatesAdminPage />
+        <RatesListPage />
+      </Guarded>
+    ),
+  },
+  {
+    path: 'admin/rates/fx',
+    element: (
+      <Guarded permission="fx.manage">
+        <FxPage />
+      </Guarded>
+    ),
+  },
+  {
+    path: 'admin/rates/markups',
+    element: (
+      <Guarded permission="rates.manage">
+        <MarkupsPage />
+      </Guarded>
+    ),
+  },
+  {
+    path: 'admin/rates/:serviceId',
+    element: (
+      <Guarded permission="rates.manage">
+        <ServiceRatePage />
       </Guarded>
     ),
   },

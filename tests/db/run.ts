@@ -579,6 +579,201 @@ async function main(): Promise<void> {
     assertEqual(after.n, before.n - 1, 'services in snapshot');
   });
 
+  // ---------------------------------------------------------------------------
+  section('Rate drafts (create_rate_draft / save_rate_draft)');
+
+  await check('an agent cannot create a draft', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.create_rate_draft($1, null)`, [ids.tourService]),
+        /row-level security|permission denied/i,
+      );
+    });
+  });
+
+  await check('an agent cannot save a draft', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+            ids.draftVersion,
+            JSON.stringify([{ pax_type: 'adult', min_pax: 1, max_pax: 9, amount: 1 }]),
+          ]),
+        /row-level security|permission denied|not found/i,
+      );
+    });
+  });
+
+  await check('a manager draft copies tiers and add-ons from the source version', async () => {
+    // Give the published transfer version an add-on worth copying.
+    const transferVersion = await one<{ id: string }>(
+      db,
+      `select id from public.service_rate_versions
+       where service_id = $1 and status = 'published' limit 1`,
+      [ids.transferService],
+    );
+
+    await asUser(db, ids.managerAuth, async () => {
+      const created = await one<{ id: string }>(
+        db,
+        `select public.create_rate_draft($1, $2) as id`,
+        [ids.transferService, transferVersion.id],
+      );
+      const tiers = await count(
+        db,
+        `select count(*)::int as n from public.service_rate_tiers where rate_version_id = $1`,
+        [created.id],
+      );
+      const source = await count(
+        db,
+        `select count(*)::int as n from public.service_rate_tiers where rate_version_id = $1`,
+        [transferVersion.id],
+      );
+      assertEqual(tiers, source, 'copied tiers');
+      assert(tiers > 0, 'the source version should have had tiers to copy');
+
+      const draftRow = await one<{ status: string; currency: string }>(
+        db,
+        `select status, currency from public.service_rate_versions where id = $1`,
+        [created.id],
+      );
+      assertEqual(draftRow.status, 'draft', 'new version status');
+      assertEqual(draftRow.currency, 'JPY', 'copied currency');
+    });
+  });
+
+  await check('a second draft for the same service is rejected', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.create_rate_draft($1, null)`, [ids.tourService]),
+        /already has a draft/,
+      );
+    });
+  });
+
+  await check('saving a published version is refused', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+            ids.publishedVersion,
+            JSON.stringify([{ pax_type: 'adult', min_pax: 1, max_pax: 60, amount: 1 }]),
+          ]),
+        /Only a draft can be edited|is inactive|published/i,
+      );
+    });
+  });
+
+  await check('saving with no tiers is refused', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.save_rate_draft($1, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb)`, [
+            ids.draftVersion,
+          ]),
+        /at least one group-size tier/,
+      );
+    });
+  });
+
+  await check('saving an out-of-range tier is refused', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+            ids.draftVersion,
+            JSON.stringify([{ pax_type: 'adult', min_pax: 9, max_pax: 2, amount: 100 }]),
+          ]),
+        /whole group size from 1 to 60/,
+      );
+    });
+  });
+
+  await check(
+    'a save replaces tiers atomically; a bad tier leaves the old ones intact',
+    async () => {
+      // Seed the draft with two good tiers that we can prove survive a failure.
+      await asUser(
+        db,
+        ids.managerAuth,
+        async () => {
+          await db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+            ids.draftVersion,
+            JSON.stringify([
+              { pax_type: 'adult', min_pax: 1, max_pax: 5, amount: 1000 },
+              { pax_type: 'adult', min_pax: 6, max_pax: 20, amount: 900 },
+            ]),
+          ]);
+        },
+        { commit: true },
+      );
+
+      const before = await count(
+        db,
+        `select count(*)::int as n from public.service_rate_tiers where rate_version_id = $1`,
+        [ids.draftVersion],
+      );
+      assertEqual(before, 2, 'tiers after the good save');
+
+      // Overlapping rows trip the exclusion constraint mid-insert.
+      await asUser(db, ids.managerAuth, async () => {
+        await assertRejects(
+          () =>
+            db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+              ids.draftVersion,
+              JSON.stringify([
+                { pax_type: 'adult', min_pax: 1, max_pax: 10, amount: 500 },
+                { pax_type: 'adult', min_pax: 8, max_pax: 20, amount: 400 },
+              ]),
+            ]),
+          /exclusion|overlap/i,
+        );
+      });
+
+      const after = await one<{ n: number; total: string }>(
+        db,
+        `select count(*)::int as n, coalesce(sum(amount), 0)::text as total
+       from public.service_rate_tiers where rate_version_id = $1`,
+        [ids.draftVersion],
+      );
+      assertEqual(after.n, 2, 'tiers after the rejected save');
+      assertEqual(Number(after.total), 1900, 'the original amounts survived');
+    },
+  );
+
+  await check('publishing a draft locks it', async () => {
+    await asUser(
+      db,
+      ids.managerAuth,
+      async () => {
+        await db.query(
+          `update public.service_rate_versions set status = 'published' where id = $1`,
+          [ids.draftVersion],
+        );
+      },
+      { commit: true },
+    );
+
+    const row = await one<{ status: string; published_at: string | null }>(
+      db,
+      `select status, published_at from public.service_rate_versions where id = $1`,
+      [ids.draftVersion],
+    );
+    assertEqual(row.status, 'published', 'status after publishing');
+    assert(row.published_at !== null, 'published_at should be stamped');
+
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.save_rate_draft($1, '{}'::jsonb, $2::jsonb, '[]'::jsonb)`, [
+            ids.draftVersion,
+            JSON.stringify([{ pax_type: 'adult', min_pax: 1, max_pax: 60, amount: 1 }]),
+          ]),
+        /Only a draft can be edited/,
+      );
+    });
+  });
+
   await db.close();
   process.exitCode = summary();
 }

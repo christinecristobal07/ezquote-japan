@@ -1018,7 +1018,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_rate_draft: {
+        Args: { p_from_version_id?: string; p_service_id: string }
+        Returns: string
+      }
+      save_rate_draft: {
+        Args: {
+          p_addons?: Json
+          p_fields?: Json
+          p_tiers?: Json
+          p_version_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       adjustment_kind:
