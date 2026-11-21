@@ -381,9 +381,9 @@ export function OutputPage() {
                 text instead and say why. */}
             {outOfDate && (
               <Alert tone="warning" title="The saved version is out of date" className="mb-3">
-                The quotation changed after this version was generated, so the saved text below
-                has been replaced with the current one. Press{' '}
-                <strong>Regenerate quotation</strong> to save it and enable copying.
+                The quotation changed after this version was generated, so the saved text below has
+                been replaced with the current one. Press <strong>Regenerate quotation</strong> to
+                save it and enable copying.
               </Alert>
             )}
 
@@ -395,8 +395,8 @@ export function OutputPage() {
             </div>
             {(latest === null || outOfDate) && (
               <p className="mt-2 text-xs text-slate-500">
-                This is a live preview.{' '}
-                {latest === null ? 'Generate' : 'Regenerate'} to save a version you can copy.
+                This is a live preview. {latest === null ? 'Generate' : 'Regenerate'} to save a
+                version you can copy.
               </p>
             )}
           </CardBody>
