@@ -8,6 +8,7 @@ import {
   CardBody,
   CardHeader,
   Checkbox,
+  Dialog,
   Field,
   Input,
   PageHeader,
@@ -22,7 +23,9 @@ import {
   calculateQuotation,
   defaultPackageTitle,
   resolveDuration,
+  ledgerView,
   toEngineInput,
+  type AdjustmentRecord,
   type ItineraryService,
 } from '@/domain';
 import type { Database } from '@/data/database.types';
@@ -30,6 +33,7 @@ import type { Database } from '@/data/database.types';
 type PaxCategory = Database['public']['Enums']['pax_category'];
 import { isManager } from '@/domain/permissions';
 import { ConflictError, ContentError } from '@/data/repositories/contentRepository';
+import type { NewAdjustment } from '@/data/repositories/adjustmentRepository';
 import type { ServiceSelection } from '@/data/repositories/quotationRepository';
 import { useAuth } from '@/features/auth/useAuth';
 import {
@@ -42,11 +46,26 @@ import {
   DurationSection,
   ItinerarySection,
   ServicesSection,
-  SummarySection,
   TravellersSection,
   type ServiceCardData,
 } from './BuilderSections';
-import { useQuotation, useSetHotels, useSetServices, useUpdateQuotation } from './queries';
+import {
+  useAddAdjustments,
+  useAdjustments,
+  useQuotation,
+  useReverseAdjustment,
+  useSetHotels,
+  useSetServices,
+  useUpdatePricing,
+  useUpdateQuotation,
+} from './queries';
+import {
+  AdjustmentForm,
+  AirfareAndMarkupCard,
+  DetailedSummary,
+  HotelCostCard,
+  LedgerTable,
+} from './PricingSections';
 import { saveStateLabel, useAutosave } from './useAutosave';
 
 const ALL_CATEGORIES: readonly PaxCategory[] = [
@@ -81,8 +100,15 @@ export function QuotationBuilderPage() {
   const update = useUpdateQuotation(id);
   const setServices = useSetServices(id);
   const setHotels = useSetHotels(id);
+  const adjustments = useAdjustments(id);
+  const addAdjustments = useAddAdjustments(id);
+  const reverseAdjustment = useReverseAdjustment(id);
+  const updatePricing = useUpdatePricing(id);
 
   const [customHotel, setCustomHotel] = useState('');
+  const [adjustmentMode, setAdjustmentMode] = useState<'hotel' | 'other' | null>(null);
+  const [reversing, setReversing] = useState<AdjustmentRecord | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
 
   const header = quotation.data?.header ?? null;
   const snapshot = quotation.data?.snapshot ?? null;
@@ -134,6 +160,7 @@ export function QuotationBuilderPage() {
     );
   }
 
+  const ledger = ledgerView(adjustments.data ?? [], snapshot);
   const paxTotal = header.paxAdults + header.paxChildren;
   const selectedIds = new Set(selected.map((row) => row.serviceId));
 
@@ -151,6 +178,21 @@ export function QuotationBuilderPage() {
     selected.flatMap((row) =>
       row.addonIds.map((addonId) => ({ serviceId: row.serviceId, addonId })),
     ),
+    // Reversed rows and the reversals themselves cancel out, so only live
+    // entries reach the engine.
+    (adjustments.data ?? [])
+      .filter((row) => {
+        const entry = ledger.byCategory
+          .get(row.paxCategory)
+          ?.entries.find((candidate) => candidate.id === row.id);
+        return entry !== undefined && !entry.isReversed && !entry.isReversal;
+      })
+      .map((row) => ({
+        paxCategory: row.paxCategory,
+        kind: row.kind,
+        amount: row.amount,
+        currency: row.currency,
+      })),
   );
 
   /** Per-person price for one service alone, for the selection cards. */
@@ -492,6 +534,66 @@ export function QuotationBuilderPage() {
             </CardBody>
           </Card>
 
+          <HotelCostCard
+            snapshot={snapshot}
+            ledger={ledger}
+            categories={header.outputCategories}
+            readOnly={readOnly}
+            onAdd={() => {
+              setAdjustmentMode('hotel');
+            }}
+          />
+
+          <Card>
+            <CardHeader
+              title="Change Rate"
+              description="Per-person adjustments. Negative amounts are allowed."
+              actions={
+                readOnly ? undefined : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setAdjustmentMode('other');
+                    }}
+                  >
+                    Add adjustment
+                  </Button>
+                )
+              }
+            />
+          </Card>
+
+          <LedgerTable
+            ledger={ledger}
+            snapshot={snapshot}
+            categories={header.outputCategories}
+            readOnly={readOnly}
+            onReverse={(entry) => {
+              setReversing(entry);
+              setReverseReason('');
+            }}
+          />
+
+          <AirfareAndMarkupCard
+            airfarePhp={header.airfarePhp}
+            markupType={header.packageMarkupType}
+            markupValue={header.packageMarkupValue}
+            readOnly={readOnly}
+            onChange={(airfarePhp, markupType, markupValue) => {
+              updatePricing.mutate(
+                {
+                  updatedAt: header.updatedAt,
+                  patch: {
+                    airfarePhp,
+                    packageMarkupType: markupType,
+                    packageMarkupValue: markupValue,
+                  },
+                },
+                { onError: reportError },
+              );
+            }}
+          />
+
           <Card>
             <CardHeader title="Output options" />
             <CardBody className="space-y-4">
@@ -556,8 +658,98 @@ export function QuotationBuilderPage() {
           </Card>
         </div>
 
-        <SummarySection input={engineInput} outputCategories={header.outputCategories} />
+        <DetailedSummary
+          input={engineInput}
+          outputCategories={header.outputCategories}
+          snapshot={snapshot}
+        />
       </div>
+
+      <Dialog
+        open={adjustmentMode !== null}
+        onOpenChange={(open) => {
+          if (!open && !addAdjustments.isPending) setAdjustmentMode(null);
+        }}
+        title={adjustmentMode === 'hotel' ? 'Add hotel cost' : 'Add a Change Rate entry'}
+        description="Entries cannot be edited later. A mistake is corrected with a reversal."
+      >
+        {adjustmentMode !== null && (
+          <AdjustmentForm
+            mode={adjustmentMode}
+            categories={header.outputCategories}
+            snapshot={snapshot}
+            nights={Math.max(1, resolved.days - 1)}
+            busy={addAdjustments.isPending}
+            onCancel={() => {
+              setAdjustmentMode(null);
+            }}
+            onSubmit={(entries: readonly NewAdjustment[]) => {
+              addAdjustments.mutate(entries, {
+                onSuccess: () => {
+                  setAdjustmentMode(null);
+                  toast.success(
+                    entries.length > 1
+                      ? `${String(entries.length)} entries added.`
+                      : 'Entry added.',
+                  );
+                },
+                onError: reportError,
+              });
+            }}
+          />
+        )}
+      </Dialog>
+
+      <Dialog
+        open={reversing !== null}
+        onOpenChange={(open) => {
+          if (!open && !reverseAdjustment.isPending) setReversing(null);
+        }}
+        title="Reverse this entry?"
+        description="The original stays on the record, with this reversal beside it."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={reverseAdjustment.isPending}
+              onClick={() => {
+                setReversing(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={reverseAdjustment.isPending}
+              disabled={reverseReason.trim().length < 3}
+              onClick={() => {
+                if (reversing === null) return;
+                reverseAdjustment.mutate(
+                  { entry: reversing, reason: reverseReason.trim() },
+                  {
+                    onSuccess: () => {
+                      setReversing(null);
+                      toast.success('Entry reversed.');
+                    },
+                    onError: reportError,
+                  },
+                );
+              }}
+            >
+              Reverse entry
+            </Button>
+          </>
+        }
+      >
+        <Field label="Reason" required hint="Why this entry was wrong.">
+          <Input
+            value={reverseReason}
+            onChange={(event) => {
+              setReverseReason(event.target.value);
+            }}
+          />
+        </Field>
+      </Dialog>
     </>
   );
 }

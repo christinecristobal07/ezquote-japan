@@ -302,3 +302,33 @@ export async function setHotels(
   );
   if (error) throw toContentError(error);
 }
+
+export interface PricingPatch {
+  readonly airfarePhp: number;
+  readonly packageMarkupType: 'fixed' | 'percent' | null;
+  readonly packageMarkupValue: number | null;
+}
+
+/** Airfare and the package markup live on the quotation row, not the ledger. */
+export async function updatePricing(
+  id: string,
+  loadedUpdatedAt: string,
+  patch: PricingPatch,
+): Promise<QuotationHeader> {
+  const { data, error } = await supabase
+    .from('quotations')
+    .update({
+      airfare_php: patch.airfarePhp,
+      package_markup_type: patch.packageMarkupType,
+      package_markup_value: patch.packageMarkupValue,
+    })
+    .eq('id', id)
+    .eq('updated_at', loadedUpdatedAt)
+    .select(HEADER_COLUMNS)
+    .overrideTypes<RawHeader[], { merge: false }>();
+
+  if (error) throw toContentError(error);
+  const row = data[0];
+  if (row === undefined) throw new ConflictError();
+  return toHeader(row);
+}

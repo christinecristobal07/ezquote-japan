@@ -16,6 +16,7 @@ const MIGRATIONS = [
   '20261121100000_content_windows_and_reorder.sql',
   '20261121110000_agent_invites.sql',
   '20261121120000_set_quotation_services.sql',
+  '20261121130000_adjustment_author.sql',
 ];
 
 /**

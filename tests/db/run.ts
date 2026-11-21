@@ -1108,6 +1108,153 @@ async function main(): Promise<void> {
     },
   );
 
+  // ---------------------------------------------------------------------------
+  section('Change Rate authorship');
+
+  let hotelEntryId = '';
+  await check("the author's name is stamped on insert", async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ id: string; created_by_name: string | null }>(
+          db,
+          `insert into public.quotation_adjustments
+             (quotation_id, pax_category, kind, amount, reason)
+           values ($1, 'twin', 'hotel', 12000, 'Twin room, 2 nights')
+           returning id, created_by_name`,
+          [quoteId],
+        );
+        hotelEntryId = row.id;
+        assertEqual(row.created_by_name, 'Agent One', 'created_by_name');
+      },
+      { commit: true },
+    );
+  });
+
+  await check('a name sent by the client is overwritten', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      const row = await one<{ created_by_name: string | null; created_by: string }>(
+        db,
+        `insert into public.quotation_adjustments
+           (quotation_id, pax_category, kind, amount, reason, created_by_name)
+         values ($1, 'quad', 'surcharge', 500, 'Spoof attempt', 'Super Admin')
+         returning created_by_name, created_by`,
+        [quoteId],
+      );
+      assertEqual(row.created_by_name, 'Agent One', 'created_by_name');
+      assertEqual(row.created_by, ids.agentProfile, 'created_by');
+    });
+  });
+
+  await check('a reversal carries its own author name', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      const row = await one<{ created_by_name: string | null }>(
+        db,
+        `insert into public.quotation_adjustments
+           (quotation_id, pax_category, kind, amount, reason, reverses_id)
+         values ($1, 'twin', 'hotel', -12000, 'Wrong room type', $2)
+         returning created_by_name`,
+        [quoteId, hotelEntryId],
+      );
+      assertEqual(row.created_by_name, 'Admin', 'created_by_name on the reversal');
+    });
+  });
+
+  await check('a reversal cannot itself be reversed', async () => {
+    const reversalId = await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ id: string }>(
+          db,
+          `insert into public.quotation_adjustments
+             (quotation_id, pax_category, kind, amount, reason, reverses_id)
+           values ($1, 'twin', 'hotel', -12000, 'Wrong room type', $2)
+           returning id`,
+          [quoteId, hotelEntryId],
+        );
+        return row.id;
+      },
+      { commit: true },
+    );
+
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, reason, reverses_id)
+             values ($1, 'twin', 'hotel', 12000, 'Undo the undo', $2)`,
+            [quoteId, reversalId],
+          ),
+        /A reversal cannot itself be reversed/,
+      );
+    });
+  });
+
+  await check('the same entry cannot be reversed twice', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, reason, reverses_id)
+             values ($1, 'twin', 'hotel', -12000, 'Again', $2)`,
+            [quoteId, hotelEntryId],
+          ),
+        /already been reversed/,
+      );
+    });
+  });
+
+  await check('a reversal must still exactly negate the original', async () => {
+    const other = await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ id: string }>(
+          db,
+          `insert into public.quotation_adjustments
+             (quotation_id, pax_category, kind, amount, reason)
+           values ($1, 'solo', 'operator_charge', 750, 'Solo supplement')
+           returning id`,
+          [quoteId],
+        );
+        return row.id;
+      },
+      { commit: true },
+    );
+
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, reason, reverses_id)
+             values ($1, 'solo', 'operator_charge', -700, 'Close enough', $2)`,
+            [quoteId, other],
+          ),
+        /exactly negate/,
+      );
+    });
+  });
+
+  await check('entries are still append-only and audited', async () => {
+    await assertRejects(
+      () =>
+        db.query(`update public.quotation_adjustments set amount = 1 where id = $1`, [
+          hotelEntryId,
+        ]),
+      /append-only/,
+    );
+    const audited = await count(
+      db,
+      `select count(*)::int as n from public.audit_log where table_name = 'quotation_adjustments'`,
+    );
+    assert(audited > 0, 'adjustments should be audited');
+  });
+
   await db.close();
   process.exitCode = summary();
 }

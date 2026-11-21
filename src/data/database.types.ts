@@ -464,6 +464,7 @@ export type Database = {
           amount: number
           created_at: string
           created_by: string | null
+          created_by_name: string | null
           currency: Database["public"]["Enums"]["currency_code"]
           id: string
           kind: Database["public"]["Enums"]["adjustment_kind"]
@@ -476,6 +477,7 @@ export type Database = {
           amount: number
           created_at?: string
           created_by?: string | null
+          created_by_name?: string | null
           currency?: Database["public"]["Enums"]["currency_code"]
           id?: string
           kind: Database["public"]["Enums"]["adjustment_kind"]
@@ -488,6 +490,7 @@ export type Database = {
           amount?: number
           created_at?: string
           created_by?: string | null
+          created_by_name?: string | null
           currency?: Database["public"]["Enums"]["currency_code"]
           id?: string
           kind?: Database["public"]["Enums"]["adjustment_kind"]
