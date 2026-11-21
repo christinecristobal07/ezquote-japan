@@ -1,0 +1,563 @@
+import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'react-router';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Checkbox,
+  Field,
+  Input,
+  PageHeader,
+  Select,
+  Spinner,
+  Tooltip,
+  useToast,
+} from '@/components/ui';
+import {
+  autoAssignDays,
+  buildItinerary,
+  calculateQuotation,
+  defaultPackageTitle,
+  resolveDuration,
+  toEngineInput,
+  type ItineraryService,
+} from '@/domain';
+import type { Database } from '@/data/database.types';
+
+type PaxCategory = Database['public']['Enums']['pax_category'];
+import { isManager } from '@/domain/permissions';
+import { ConflictError, ContentError } from '@/data/repositories/contentRepository';
+import type { ServiceSelection } from '@/data/repositories/quotationRepository';
+import { useAuth } from '@/features/auth/useAuth';
+import {
+  useAppSettings,
+  useHotels,
+  useServiceMeta,
+  useBookingSites,
+} from '@/features/content/queries';
+import {
+  DurationSection,
+  ItinerarySection,
+  ServicesSection,
+  SummarySection,
+  TravellersSection,
+  type ServiceCardData,
+} from './BuilderSections';
+import { useQuotation, useSetHotels, useSetServices, useUpdateQuotation } from './queries';
+import { saveStateLabel, useAutosave } from './useAutosave';
+
+const ALL_CATEGORIES: readonly PaxCategory[] = [
+  'quad',
+  'triple',
+  'twin',
+  'solo',
+  'child',
+  'sneak_in',
+];
+
+function settingText(
+  settings: readonly { key: string; value: unknown }[] | undefined,
+  key: string,
+  fallback: string,
+): string {
+  const value = settings?.find((row) => row.key === key)?.value;
+  return typeof value === 'string' && value !== '' ? value : fallback;
+}
+
+export function QuotationBuilderPage() {
+  const { id = '' } = useParams();
+  const toast = useToast();
+  const { profile } = useAuth();
+
+  const quotation = useQuotation(id);
+  const serviceMeta = useServiceMeta();
+  const settings = useAppSettings();
+  const hotels = useHotels();
+  const bookingSites = useBookingSites();
+
+  const update = useUpdateQuotation(id);
+  const setServices = useSetServices(id);
+  const setHotels = useSetHotels(id);
+
+  const [customHotel, setCustomHotel] = useState('');
+
+  const header = quotation.data?.header ?? null;
+  const snapshot = quotation.data?.snapshot ?? null;
+
+  const headerSave = useAutosave<Parameters<typeof update.mutateAsync>[0]['patch']>(
+    useCallback(
+      (patch) => {
+        if (header === null) return Promise.resolve();
+        return update.mutateAsync({ updatedAt: header.updatedAt, patch });
+      },
+      [header, update],
+    ),
+  );
+
+  const readOnly =
+    profile === null ||
+    header === null ||
+    (header.agentId !== profile.id && !isManager(profile.role));
+
+  const selected = quotation.data?.services ?? [];
+  const dayByService = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const row of selected) {
+      const service = snapshot?.serviceById.get(row.serviceId);
+      if (service?.consumesDay === true) map.set(row.serviceId, row.dayNumber);
+    }
+    return map;
+  }, [selected, snapshot]);
+
+  const serviceNames = useMemo(
+    () => new Map((snapshot?.services ?? []).map((s) => [s.serviceId, s.name])),
+    [snapshot],
+  );
+
+  if (quotation.isPending || profile === null) return <Spinner label="Loading quotation…" />;
+  if (quotation.error !== null) {
+    return (
+      <Alert tone="danger" title="Could not load this quotation">
+        {quotation.error.message}
+      </Alert>
+    );
+  }
+  if (quotation.data === null || header === null || snapshot === null) {
+    return (
+      <>
+        <PageHeader title="Quotation not found" />
+        <Alert tone="danger">It does not exist, or you cannot see it.</Alert>
+      </>
+    );
+  }
+
+  const paxTotal = header.paxAdults + header.paxChildren;
+  const selectedIds = new Set(selected.map((row) => row.serviceId));
+
+  const engineInput = toEngineInput(
+    snapshot,
+    {
+      paxAdults: header.paxAdults,
+      paxChildren: header.paxChildren,
+      airfarePhp: header.airfarePhp,
+      packageMarkupType: header.packageMarkupType,
+      packageMarkupValue: header.packageMarkupValue,
+      outputCategories: header.outputCategories,
+    },
+    selected.map((row) => ({ serviceId: row.serviceId, sortOrder: row.sortOrder })),
+    selected.flatMap((row) =>
+      row.addonIds.map((addonId) => ({ serviceId: row.serviceId, addonId })),
+    ),
+  );
+
+  /** Per-person price for one service alone, for the selection cards. */
+  function perPersonFor(serviceId: string): number | null {
+    const single = calculateQuotation({
+      ...engineInput,
+      services: [{ serviceId }],
+      outputCategories: ['quad'],
+      packageMarkup: null,
+      airfarePhp: 0,
+    });
+    const category = single.categories[0];
+    if (category === undefined || category.final === null) return null;
+    return category.breakdown
+      .filter((line) => line.kind === 'service' || line.kind === 'service_markup')
+      .reduce((sum, line) => sum + line.amount, 0);
+  }
+
+  const cards: ServiceCardData[] = snapshot.services.map((service) => {
+    const row = selected.find((entry) => entry.serviceId === service.serviceId);
+    const quotable = service.tiers.some(
+      (tier) => paxTotal >= tier.minPax && paxTotal <= tier.maxPax,
+    );
+    return {
+      service,
+      selected: selectedIds.has(service.serviceId),
+      addonIds: row?.addonIds ?? [],
+      perPersonPhp: quotable ? perPersonFor(service.serviceId) : null,
+      quotable,
+    };
+  });
+
+  const itineraryServices: ItineraryService[] = selected.map((row) => {
+    const snap = snapshot.serviceById.get(row.serviceId);
+    const meta = serviceMeta.data?.find((entry) => entry.id === row.serviceId);
+    return {
+      serviceId: row.serviceId,
+      name: snap?.name ?? row.serviceId,
+      consumesDay: snap?.consumesDay ?? false,
+      addsNight: snap?.addsNight ?? false,
+      dayNumber: row.dayNumber,
+      itineraryTitle: meta?.itineraryTitle ?? null,
+      itineraryText: meta?.itineraryText ?? null,
+    };
+  });
+
+  const resolved = resolveDuration(
+    header.durationMode === 'derived'
+      ? { mode: 'derived', services: itineraryServices }
+      : {
+          mode: 'agent_selected',
+          agentDays: header.durationDays,
+          services: itineraryServices,
+        },
+  );
+
+  const itinerary = buildItinerary({
+    durationDays: resolved.days,
+    services: itineraryServices,
+    arrivalText: settingText(settings.data, 'itinerary.arrival_text', 'Welcome to Japan!'),
+    departureText: settingText(
+      settings.data,
+      'itinerary.departure_text',
+      'Safe travels back home!',
+    ),
+    freeDayText: settingText(settings.data, 'itinerary.free_day_text', 'Free time own leisure'),
+  });
+
+  function reportError(caught: unknown): void {
+    if (caught instanceof ConflictError) {
+      toast.error('This quotation changed in another tab. Reload.');
+      return;
+    }
+    toast.error(caught instanceof ContentError ? caught.message : 'Something went wrong.');
+  }
+
+  function writeServices(next: readonly ServiceSelection[]): void {
+    setServices.mutate(next, { onError: reportError });
+  }
+
+  function currentSelections(): ServiceSelection[] {
+    return selected.map((row) => ({
+      serviceId: row.serviceId,
+      dayNumber: row.dayNumber,
+      sortOrder: row.sortOrder,
+      addonIds: row.addonIds,
+    }));
+  }
+
+  const chosenHotelIds = new Set(
+    quotation.data.hotels
+      .map((row) => row.hotelId)
+      .filter((value): value is string => value !== null),
+  );
+  const customHotels = quotation.data.hotels.filter((row) => row.customName !== null);
+  const categoryHotels = (hotels.data ?? []).filter(
+    (hotel) => hotel.isActive && hotel.starRating === header.hotelCategory,
+  );
+
+  return (
+    <>
+      <PageHeader
+        title={header.packageTitle ?? defaultPackageTitle(resolved.label)}
+        description={`${header.referenceNo}${header.clientName === null ? '' : ` · ${header.clientName}`}`}
+        actions={
+          <span className="flex items-center gap-3">
+            <Badge tone="neutral">{header.status}</Badge>
+            <Tooltip label="This quotation keeps these rates even if rates change later.">
+              <span className="text-xs text-slate-600">
+                Rates as of {new Date(header.ratesAsOf).toLocaleDateString('en-PH')} · JPY{' '}
+                {(snapshot.fx.JPY ?? 0) / 1_000_000}
+              </span>
+            </Tooltip>
+            {headerSave.state !== 'idle' && (
+              <span className="text-xs text-slate-500">
+                {saveStateLabel(headerSave.state)}
+                {headerSave.state === 'failed' && (
+                  <Button size="sm" variant="ghost" onClick={headerSave.retry}>
+                    Retry
+                  </Button>
+                )}
+              </span>
+            )}
+          </span>
+        }
+      />
+
+      {readOnly && (
+        <Alert tone="info" className="mb-6">
+          Viewing {serviceNames.get(header.agentId) ?? 'another agent'}&apos;s quotation
+          (read-only).
+        </Alert>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="space-y-6">
+          <TravellersSection
+            adults={header.paxAdults}
+            children={header.paxChildren}
+            snapshot={snapshot}
+            disabled={readOnly}
+            onChange={(adults, children) => {
+              headerSave.push({ paxAdults: adults, paxChildren: children });
+            }}
+          />
+
+          <DurationSection
+            mode={header.durationMode}
+            days={header.durationDays}
+            services={itineraryServices}
+            disabled={readOnly}
+            onChange={(mode, days) => {
+              headerSave.push({ durationMode: mode, durationDays: days });
+            }}
+          />
+
+          <ServicesSection
+            tours={cards.filter((card) => card.service.serviceType === 'tour')}
+            transfers={cards.filter((card) => card.service.serviceType === 'transfer')}
+            disabled={readOnly}
+            onToggle={(serviceId, isSelected) => {
+              const next = isSelected
+                ? [
+                    ...currentSelections(),
+                    {
+                      serviceId,
+                      dayNumber: null,
+                      sortOrder: selected.length + 1,
+                      addonIds: [],
+                    },
+                  ]
+                : currentSelections().filter((row) => row.serviceId !== serviceId);
+              writeServices(next);
+            }}
+            onToggleAddon={(serviceId, addonId, isSelected) => {
+              writeServices(
+                currentSelections().map((row) =>
+                  row.serviceId === serviceId
+                    ? {
+                        ...row,
+                        addonIds: isSelected
+                          ? [...row.addonIds, addonId]
+                          : row.addonIds.filter((value) => value !== addonId),
+                      }
+                    : row,
+                ),
+              );
+            }}
+          />
+
+          <ItinerarySection
+            days={itinerary.days}
+            issues={itinerary.issues}
+            assignableDays={Array.from(
+              { length: Math.max(0, resolved.days - 2) },
+              (_, index) => index + 2,
+            )}
+            dayByService={dayByService}
+            serviceNames={serviceNames}
+            disabled={readOnly}
+            onAssign={(serviceId, day) => {
+              writeServices(
+                currentSelections().map((row) =>
+                  row.serviceId === serviceId ? { ...row, dayNumber: day } : row,
+                ),
+              );
+            }}
+            onAutoArrange={() => {
+              const assigned = autoAssignDays(itineraryServices, resolved.days);
+              const byId = new Map(assigned.map((entry) => [entry.serviceId, entry.dayNumber]));
+              writeServices(
+                currentSelections().map((row) => ({
+                  ...row,
+                  dayNumber: byId.get(row.serviceId) ?? row.dayNumber,
+                })),
+              );
+            }}
+          />
+
+          <Card>
+            <CardHeader title="Hotels" description={`${String(header.hotelCategory ?? 3)} star`} />
+            <CardBody className="space-y-4">
+              <Field label="Category">
+                <Select
+                  value={String(header.hotelCategory ?? 3)}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    headerSave.push({ hotelCategory: Number(event.target.value) });
+                  }}
+                >
+                  <option value="3">3 star</option>
+                  <option value="4">4 star</option>
+                  <option value="5">5 star</option>
+                </Select>
+              </Field>
+
+              <ul className="space-y-1">
+                {categoryHotels.map((hotel) => (
+                  <li key={hotel.id}>
+                    <Checkbox
+                      label={hotel.name}
+                      checked={chosenHotelIds.has(hotel.id)}
+                      disabled={readOnly}
+                      onChange={(event) => {
+                        const kept = (quotation.data?.hotels ?? [])
+                          .filter((row) => row.hotelId !== hotel.id)
+                          .map((row) => ({ hotelId: row.hotelId, customName: row.customName }));
+                        setHotels.mutate(
+                          event.target.checked
+                            ? [...kept, { hotelId: hotel.id, customName: null }]
+                            : kept,
+                          { onError: reportError },
+                        );
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex items-end gap-2">
+                <Field label="Add other hotel" className="flex-1">
+                  <Input
+                    value={customHotel}
+                    disabled={readOnly}
+                    placeholder="Hotel XYZ"
+                    onChange={(event) => {
+                      setCustomHotel(event.target.value);
+                    }}
+                  />
+                </Field>
+                <Button
+                  variant="secondary"
+                  disabled={readOnly || customHotel.trim() === ''}
+                  onClick={() => {
+                    const kept = (quotation.data?.hotels ?? []).map((row) => ({
+                      hotelId: row.hotelId,
+                      customName: row.customName,
+                    }));
+                    setHotels.mutate([...kept, { hotelId: null, customName: customHotel.trim() }], {
+                      onError: reportError,
+                      onSuccess: () => {
+                        setCustomHotel('');
+                      },
+                    });
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+
+              {customHotels.length > 0 && (
+                <ul className="text-sm text-slate-700">
+                  {customHotels.map((row) => (
+                    <li key={row.id}>{row.customName}</li>
+                  ))}
+                </ul>
+              )}
+
+              <Field label="Booking status">
+                <Select
+                  value={header.bookingStatus}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    headerSave.push({
+                      bookingStatus: event.target.value as typeof header.bookingStatus,
+                    });
+                  }}
+                >
+                  <option value="not_booked">Not booked</option>
+                  <option value="booked">Booked</option>
+                  <option value="confirmed">Confirmed</option>
+                </Select>
+              </Field>
+
+              {header.bookingStatus !== 'confirmed' && (
+                <Alert tone="warning">
+                  Rooms &amp; Rates are subjected to AVAILABILITY and REVISION at point of
+                  confirmation or prior
+                </Alert>
+              )}
+
+              {(bookingSites.data ?? []).length > 0 && (
+                <p className="flex flex-wrap gap-2 text-sm">
+                  {(bookingSites.data ?? [])
+                    .filter((site) => site.isActive)
+                    .map((site) => (
+                      <a
+                        key={site.id}
+                        href={site.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-700 hover:underline"
+                      >
+                        {site.name}
+                      </a>
+                    ))}
+                </p>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="Output options" />
+            <CardBody className="space-y-4">
+              <div className="flex items-end gap-2">
+                <Field label="Package title" className="flex-1">
+                  <Input
+                    value={header.packageTitle ?? defaultPackageTitle(resolved.label)}
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      headerSave.push({ packageTitle: event.target.value });
+                    }}
+                  />
+                </Field>
+                <Button
+                  variant="secondary"
+                  disabled={readOnly}
+                  onClick={() => {
+                    headerSave.push({ packageTitle: defaultPackageTitle(resolved.label) });
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
+
+              <Field label="Season label">
+                <Input
+                  value={header.seasonLabel ?? ''}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    headerSave.push({ seasonLabel: event.target.value });
+                  }}
+                />
+              </Field>
+
+              <fieldset>
+                <legend className="mb-1 text-sm font-medium text-slate-700">
+                  Categories to show
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {ALL_CATEGORIES.map((category) => {
+                    const checked = header.outputCategories.includes(category);
+                    const last = checked && header.outputCategories.length === 1;
+                    return (
+                      <Checkbox
+                        key={category}
+                        label={category.replace('_', ' ')}
+                        checked={checked}
+                        disabled={readOnly || last}
+                        onChange={(event) => {
+                          headerSave.push({
+                            outputCategories: event.target.checked
+                              ? [...header.outputCategories, category]
+                              : header.outputCategories.filter((value) => value !== category),
+                          });
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </CardBody>
+          </Card>
+        </div>
+
+        <SummarySection input={engineInput} outputCategories={header.outputCategories} />
+      </div>
+    </>
+  );
+}
