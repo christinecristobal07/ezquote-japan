@@ -530,6 +530,39 @@ export type Database = {
           },
         ]
       }
+      quotation_cities: {
+        Row: {
+          city_id: string
+          created_at: string
+          quotation_id: string
+        }
+        Insert: {
+          city_id: string
+          created_at?: string
+          quotation_id: string
+        }
+        Update: {
+          city_id?: string
+          created_at?: string
+          quotation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_cities_city_id_fkey"
+            columns: ["city_id"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_cities_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotation_hotels: {
         Row: {
           custom_name: string | null
@@ -1069,6 +1102,10 @@ export type Database = {
           p_tiers?: Json
           p_version_id: string
         }
+        Returns: undefined
+      }
+      set_quotation_cities: {
+        Args: { p_city_ids: string[]; p_quotation_id: string }
         Returns: undefined
       }
       set_quotation_services: {

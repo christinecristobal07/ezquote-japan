@@ -57,6 +57,8 @@ export interface QuotationDetail {
   readonly snapshot: RateSnapshot;
   readonly services: readonly QuotationServiceRow[];
   readonly hotels: readonly QuotationHotelRow[];
+  /** The cities the package covers (FR-001). */
+  readonly cityIds: readonly string[];
 }
 
 const HEADER_COLUMNS =
@@ -167,7 +169,7 @@ export async function getQuotation(id: string): Promise<QuotationDetail | null> 
   if (error) throw toContentError(error);
   if (data === null) return null;
 
-  const [servicesResult, addonsResult, hotelsResult] = await Promise.all([
+  const [servicesResult, addonsResult, hotelsResult, citiesResult] = await Promise.all([
     supabase
       .from('quotation_services')
       .select('id, service_id, day_number, sort_order')
@@ -179,11 +181,13 @@ export async function getQuotation(id: string): Promise<QuotationDetail | null> 
       .select('id, hotel_id, custom_name, sort_order')
       .eq('quotation_id', id)
       .order('sort_order'),
+    supabase.from('quotation_cities').select('city_id').eq('quotation_id', id),
   ]);
 
   if (servicesResult.error) throw toContentError(servicesResult.error);
   if (addonsResult.error) throw toContentError(addonsResult.error);
   if (hotelsResult.error) throw toContentError(hotelsResult.error);
+  if (citiesResult.error) throw toContentError(citiesResult.error);
 
   const addonsByRow = new Map<string, string[]>();
   for (const addon of addonsResult.data) {
@@ -209,7 +213,22 @@ export async function getQuotation(id: string): Promise<QuotationDetail | null> 
       customName: row.custom_name,
       sortOrder: row.sort_order,
     })),
+    cityIds: citiesResult.data.map((row) => row.city_id),
   };
+}
+
+/**
+ * Replaces the cities a quotation covers.
+ *
+ * A function rather than delete-then-insert, so the two halves cannot be
+ * separated by a failure and leave a quotation covering nowhere.
+ */
+export async function setCities(quotationId: string, cityIds: readonly string[]): Promise<void> {
+  const { error } = await supabase.rpc('set_quotation_cities', {
+    p_quotation_id: quotationId,
+    p_city_ids: [...cityIds],
+  });
+  if (error) throw toContentError(error);
 }
 
 export type QuotationPatch = Partial<{

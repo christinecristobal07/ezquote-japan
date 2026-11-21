@@ -24,6 +24,7 @@ function cardFor(serviceId: string, overrides: Partial<ServiceCardData> = {}): S
     addonIds: [],
     perPersonPhp: 642_500,
     quotable: true,
+    outOfScope: false,
     ...overrides,
   };
 }

@@ -158,6 +158,8 @@ export interface ServiceCardData {
   readonly perPersonPhp: number | null;
   /** Services with no tier for this group size cannot be quoted. */
   readonly quotable: boolean;
+  /** Selected, but in a city the quotation no longer covers (FR-001). */
+  readonly outOfScope: boolean;
 }
 
 export function ServicesSection({
@@ -213,6 +215,7 @@ export function ServicesSection({
                     {entry.service.transferDirection === 'one_way' ? 'One way' : 'Round trip'}
                   </Badge>
                 )}
+                {entry.outOfScope && <Badge tone="warning">Outside the chosen cities</Badge>}
               </p>
               {entry.selected &&
                 entry.service.addons.map((addon) => (
@@ -238,7 +241,7 @@ export function ServicesSection({
     <Card>
       <CardHeader
         title="Tours & transfers"
-        description="Only services that were available when this quotation was created."
+        description="Filtered to the cities this package covers. Only services that were available when this quotation was created."
       />
       <CardBody className="space-y-6">
         {group('Tours', tours)}

@@ -12,10 +12,11 @@ import {
   Select,
   useToast,
 } from '@/components/ui';
-import { MAX_PAX, MIN_PAX } from '@/domain';
+import { citySelectionError, MAX_PAX, MIN_PAX } from '@/domain';
 import { ContentError } from '@/data/repositories/contentRepository';
-import { setServices } from '@/data/repositories/quotationRepository';
-import { useAppSettings } from '@/features/content/queries';
+import { getQuotation, setCities, setServices } from '@/data/repositories/quotationRepository';
+import { useAppSettings, useCities } from '@/features/content/queries';
+import { CitiesField } from './CitiesField';
 import { useCreateQuotation } from './queries';
 
 /** Today in Manila, so a traveller cannot pick a date already past there. */
@@ -33,12 +34,14 @@ export function NewQuotationPage() {
   const toast = useToast();
   const create = useCreateQuotation();
   const settings = useAppSettings();
+  const cities = useCities();
 
   const [clientName, setClientName] = useState('');
   const [travelDate, setTravelDate] = useState('');
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [hotelCategory, setHotelCategory] = useState(3);
+  const [cityIds, setCityIds] = useState<readonly string[]>([]);
 
   const today = manilaToday();
   const total = adults + children;
@@ -48,7 +51,8 @@ export function NewQuotationPage() {
       : undefined;
   const dateError =
     travelDate !== '' && travelDate < today ? 'The travel date cannot be in the past.' : undefined;
-  const canSubmit = paxError === undefined && dateError === undefined;
+  const cityError = citySelectionError(cityIds);
+  const canSubmit = paxError === undefined && dateError === undefined && cityError === null;
 
   async function submit(): Promise<void> {
     const header = await create.mutateAsync({
@@ -59,6 +63,8 @@ export function NewQuotationPage() {
       hotelCategory,
     });
 
+    await setCities(header.id, cityIds);
+
     // Pre-select the defaults, but only those the new snapshot actually has.
     const raw = settings.data?.find((row) => row.key === 'quotation.default_service_codes')?.value;
     const codes = Array.isArray(raw)
@@ -66,9 +72,7 @@ export function NewQuotationPage() {
       : [];
 
     if (codes.length > 0) {
-      const detail = await import('@/data/repositories/quotationRepository').then((module) =>
-        module.getQuotation(header.id),
-      );
+      const detail = await getQuotation(header.id);
       const available = (detail?.snapshot.services ?? []).filter((service) =>
         codes.includes(service.code),
       );
@@ -102,6 +106,13 @@ export function NewQuotationPage() {
             Creating the quotation freezes today&apos;s rates into it. Later rate changes will not
             affect it.
           </Alert>
+
+          <CitiesField
+            cities={(cities.data ?? []).filter((city) => city.isActive)}
+            selected={cityIds}
+            disabled={create.isPending}
+            onChange={setCityIds}
+          />
 
           <Field label="Client name" hint="Optional. It appears on the quotation.">
             <Input

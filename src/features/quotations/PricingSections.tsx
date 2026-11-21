@@ -650,7 +650,7 @@ function CategoryBreakdown({
         <span className="text-sm text-slate-700">
           {snapshot.categoryByCode.get(category.paxCategory)?.outputLabel ?? category.outputLabel}
         </span>
-        <span className="text-lg font-semibold">
+        <span className="text-lg font-semibold" data-testid="quotation-total">
           <MoneyText centavos={category.final} />
         </span>
       </div>

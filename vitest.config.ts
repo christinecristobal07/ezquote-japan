@@ -18,7 +18,7 @@ export default defineConfig({
         test: {
           name: 'domain',
           environment: 'node',
-          include: ['src/**/*.test.ts'],
+          include: ['src/**/*.test.ts', 'tests/uat/**/*.test.ts'],
         },
       },
       {

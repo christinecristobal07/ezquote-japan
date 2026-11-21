@@ -21,7 +21,11 @@ import {
   autoAssignDays,
   buildItinerary,
   calculateQuotation,
+  cityNames,
   defaultPackageTitle,
+  filterToCities,
+  inCityScope,
+  outOfCityScope,
   resolveDuration,
   ledgerView,
   toEngineInput,
@@ -38,6 +42,7 @@ import type { ServiceSelection } from '@/data/repositories/quotationRepository';
 import { useAuth } from '@/features/auth/useAuth';
 import {
   useAppSettings,
+  useCities,
   useHotels,
   useServiceMeta,
   useBookingSites,
@@ -54,6 +59,7 @@ import {
   useAdjustments,
   useQuotation,
   useReverseAdjustment,
+  useSetCities,
   useSetHotels,
   useSetServices,
   useUpdatePricing,
@@ -66,6 +72,7 @@ import {
   HotelCostCard,
   LedgerTable,
 } from './PricingSections';
+import { CitiesField } from './CitiesField';
 import { SnapshotPanel } from './SnapshotPanel';
 import { saveStateLabel, useAutosave } from './useAutosave';
 
@@ -97,10 +104,12 @@ export function QuotationBuilderPage() {
   const settings = useAppSettings();
   const hotels = useHotels();
   const bookingSites = useBookingSites();
+  const cities = useCities();
 
   const update = useUpdateQuotation(id);
   const setServices = useSetServices(id);
   const setHotels = useSetHotels(id);
+  const setCities = useSetCities(id);
   const adjustments = useAdjustments(id);
   const addAdjustments = useAddAdjustments(id);
   const reverseAdjustment = useReverseAdjustment(id);
@@ -142,6 +151,16 @@ export function QuotationBuilderPage() {
   const serviceNames = useMemo(
     () => new Map((snapshot?.services ?? []).map((s) => [s.serviceId, s.name])),
     [snapshot],
+  );
+
+  const cityIds = quotation.data?.cityIds ?? [];
+  /**
+   * The snapshot does not carry a service's city — it freezes rates, not
+   * reference data — so the city comes from the live service list.
+   */
+  const cityByService = useMemo(
+    () => new Map((serviceMeta.data ?? []).map((meta) => [meta.id, meta.cityId])),
+    [serviceMeta.data],
   );
 
   if (quotation.isPending || profile === null) return <Spinner label="Loading quotation…" />;
@@ -212,19 +231,26 @@ export function QuotationBuilderPage() {
       .reduce((sum, line) => sum + line.amount, 0);
   }
 
-  const cards: ServiceCardData[] = snapshot.services.map((service) => {
-    const row = selected.find((entry) => entry.serviceId === service.serviceId);
-    const quotable = service.tiers.some(
-      (tier) => paxTotal >= tier.minPax && paxTotal <= tier.maxPax,
-    );
-    return {
-      service,
-      selected: selectedIds.has(service.serviceId),
-      addonIds: row?.addonIds ?? [],
-      perPersonPhp: quotable ? perPersonFor(service.serviceId) : null,
-      quotable,
-    };
-  });
+  const cards: ServiceCardData[] = snapshot.services
+    .map((service) => {
+      const row = selected.find((entry) => entry.serviceId === service.serviceId);
+      const quotable = service.tiers.some(
+        (tier) => paxTotal >= tier.minPax && paxTotal <= tier.maxPax,
+      );
+      const isSelected = selectedIds.has(service.serviceId);
+      const serviceCity = cityByService.get(service.serviceId) ?? null;
+      return {
+        service,
+        selected: isSelected,
+        addonIds: row?.addonIds ?? [],
+        perPersonPhp: quotable ? perPersonFor(service.serviceId) : null,
+        quotable,
+        outOfScope: isSelected && !inCityScope(serviceCity, cityIds),
+        inScope: inCityScope(serviceCity, cityIds),
+      };
+    })
+    // Out of scope but already selected stays visible, so it can be removed.
+    .filter((card) => card.inScope || card.selected);
 
   const itineraryServices: ItineraryService[] = selected.map((row) => {
     const snap = snapshot.serviceById.get(row.serviceId);
@@ -289,9 +315,17 @@ export function QuotationBuilderPage() {
       .filter((value): value is string => value !== null),
   );
   const customHotels = quotation.data.hotels.filter((row) => row.customName !== null);
-  const categoryHotels = (hotels.data ?? []).filter(
-    (hotel) => hotel.isActive && hotel.starRating === header.hotelCategory,
+  const categoryHotels = filterToCities(
+    (hotels.data ?? []).filter(
+      (hotel) => hotel.isActive && hotel.starRating === header.hotelCategory,
+    ),
+    cityIds,
   );
+
+  const chosenReferenceHotels = (hotels.data ?? []).filter((hotel) => chosenHotelIds.has(hotel.id));
+  const hotelsOutOfScope = outOfCityScope(chosenReferenceHotels, cityIds);
+  const servicesOutOfScope = cards.filter((card) => card.outOfScope);
+  const selectedCityNames = cityNames(cityIds, cities.data ?? []);
 
   return (
     <>
@@ -334,8 +368,47 @@ export function QuotationBuilderPage() {
         </Alert>
       )}
 
+      {(servicesOutOfScope.length > 0 || hotelsOutOfScope.length > 0) && (
+        <Alert
+          tone="warning"
+          title="Some selections are outside the chosen cities"
+          className="mb-6"
+        >
+          <p>Nothing was removed. Review these, or add the city back.</p>
+          <ul className="mt-2 list-disc pl-5">
+            {servicesOutOfScope.map((card) => (
+              <li key={card.service.serviceId}>{card.service.name}</li>
+            ))}
+            {hotelsOutOfScope.map((hotel) => (
+              <li key={hotel.id}>{hotel.name}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Basics"
+              description={
+                selectedCityNames.length > 0
+                  ? selectedCityNames.join(' · ')
+                  : 'Choose the cities this package covers.'
+              }
+            />
+            <CardBody>
+              <CitiesField
+                cities={(cities.data ?? []).filter((city) => city.isActive)}
+                selected={cityIds}
+                disabled={readOnly}
+                onChange={(next) => {
+                  setCities.mutate(next, { onError: reportError });
+                }}
+              />
+            </CardBody>
+          </Card>
+
           <TravellersSection
             adults={header.paxAdults}
             children={header.paxChildren}

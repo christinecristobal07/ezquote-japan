@@ -39,3 +39,7 @@ coverage
 scripts/seed/data/*
 !scripts/seed/data/.gitkeep
 scripts/seed/out/
+!.env.uat.example
+e2e/.auth/
+e2e/.results/
+e2e/.report/

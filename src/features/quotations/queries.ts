@@ -9,6 +9,7 @@ import type { AdjustmentRecord } from '@/domain';
 import {
   createQuotation,
   getQuotation,
+  setCities,
   setHotels,
   setServices,
   updatePricing,
@@ -63,6 +64,14 @@ export function useSetHotels(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (hotels: readonly HotelSelection[]) => setHotels(id, hotels),
+    onSuccess: () => client.invalidateQueries({ queryKey: quotationKeys.one(id) }),
+  });
+}
+
+export function useSetCities(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (cityIds: readonly string[]) => setCities(id, cityIds),
     onSuccess: () => client.invalidateQueries({ queryKey: quotationKeys.one(id) }),
   });
 }

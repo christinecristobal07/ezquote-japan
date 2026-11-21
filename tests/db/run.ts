@@ -1390,6 +1390,186 @@ async function main(): Promise<void> {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  section('Cities covered');
+
+  let osaka = '';
+  let cityQuoteId = '';
+
+  await check('the table is reachable by the API role at all', async () => {
+    const granted = await count(
+      db,
+      `select count(*)::int as n from information_schema.role_table_grants
+       where grantee = 'authenticated' and table_name = 'quotation_cities'
+         and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')`,
+    );
+    assertEqual(granted, 4, 'authenticated holds all four privileges');
+  });
+
+  await check('the owner records the cities a quotation covers', async () => {
+    const city = await one<{ id: string }>(
+      db,
+      `insert into public.cities (name) values ('Osaka') returning id`,
+    );
+    osaka = city.id;
+
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ id: string }>(
+          db,
+          `insert into public.quotations (reference_no, agent_id, hotel_category)
+           values ('', $1, 3) returning id`,
+          [ids.agentProfile],
+        );
+        cityQuoteId = row.id;
+        await db.query(`select public.set_quotation_cities($1, $2::uuid[])`, [
+          cityQuoteId,
+          [ids.tokyo, osaka],
+        ]);
+      },
+      { commit: true },
+    );
+
+    const names = await db.query<{ name: string }>(
+      `select c.name from public.quotation_cities qc
+       join public.cities c on c.id = qc.city_id
+       where qc.quotation_id = $1 order by c.name`,
+      [cityQuoteId],
+    );
+    assertEqual(
+      names.rows.map((row) => row.name),
+      ['Osaka', 'Tokyo'],
+      'both cities were recorded',
+    );
+  });
+
+  await check('calling it again replaces the selection', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        await db.query(`select public.set_quotation_cities($1, $2::uuid[])`, [
+          cityQuoteId,
+          [osaka],
+        ]);
+      },
+      { commit: true },
+    );
+    const remaining = await db.query<{ city_id: string }>(
+      `select city_id from public.quotation_cities where quotation_id = $1`,
+      [cityQuoteId],
+    );
+    assertEqual(
+      remaining.rows.map((row) => row.city_id),
+      [osaka],
+      'Tokyo was dropped and Osaka kept',
+    );
+  });
+
+  await check('setting the same city twice is not an error', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await db.query(`select public.set_quotation_cities($1, $2::uuid[])`, [
+        cityQuoteId,
+        [osaka, osaka, ids.tokyo],
+      ]);
+      const n = await count(
+        db,
+        `select count(*)::int as n from public.quotation_cities where quotation_id = $1`,
+        [cityQuoteId],
+      );
+      assertEqual(n, 2, 'duplicates collapse to one row each');
+    });
+  });
+
+  await check('another agent cannot change the cities, and is told so', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.set_quotation_cities($1, $2::uuid[])`, [cityQuoteId, [osaka]]),
+        /cannot change this quotation/,
+      );
+    });
+  });
+
+  await check('another agent cannot even see them', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      const n = await count(
+        db,
+        `select count(*)::int as n from public.quotation_cities where quotation_id = $1`,
+        [cityQuoteId],
+      );
+      assertEqual(n, 0, "RLS hides another agent's quotation");
+    });
+  });
+
+  await check("a supervisor sees their team member's cities", async () => {
+    await asUser(db, ids.supervisorAuth, async () => {
+      const n = await count(
+        db,
+        `select count(*)::int as n from public.quotation_cities where quotation_id = $1`,
+        [cityQuoteId],
+      );
+      assert(n > 0, 'the supervisor can read them');
+    });
+  });
+
+  await check('a city still used by a quotation cannot be deleted', async () => {
+    await assertRejects(
+      () => db.query(`delete from public.cities where id = $1`, [osaka]),
+      /violates RESTRICT setting of foreign key constraint/,
+    );
+  });
+
+  await check('deleting a quotation takes its cities with it', async () => {
+    const throwaway = await one<{ id: string }>(
+      db,
+      `insert into public.quotations (reference_no, agent_id, hotel_category)
+       values ('', $1, 3) returning id`,
+      [ids.agentProfile],
+    );
+    await db.query(`insert into public.quotation_cities (quotation_id, city_id) values ($1, $2)`, [
+      throwaway.id,
+      osaka,
+    ]);
+    await db.query(`delete from public.quotations where id = $1`, [throwaway.id]);
+    const left = await count(
+      db,
+      `select count(*)::int as n from public.quotation_cities where quotation_id = $1`,
+      [throwaway.id],
+    );
+    assertEqual(left, 0, 'the join rows went with the quotation');
+  });
+
+  await check('a requote carries the cities across', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ result: { id: string } }>(
+          db,
+          `select public.duplicate_quotation($1) as result`,
+          [cityQuoteId],
+        );
+        const copied = await db.query<{ city_id: string }>(
+          `select city_id from public.quotation_cities where quotation_id = $1 order by city_id`,
+          [row.result.id],
+        );
+        const original = await db.query<{ city_id: string }>(
+          `select city_id from public.quotation_cities where quotation_id = $1 order by city_id`,
+          [cityQuoteId],
+        );
+        assertEqual(
+          copied.rows.map((entry) => entry.city_id),
+          original.rows.map((entry) => entry.city_id),
+          'the copy covers the same cities',
+        );
+      },
+      { commit: true },
+    );
+  });
+
   await db.close();
   process.exitCode = summary();
 }

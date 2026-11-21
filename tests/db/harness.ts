@@ -18,6 +18,7 @@ const MIGRATIONS = [
   '20261121120000_set_quotation_services.sql',
   '20261121130000_adjustment_author.sql',
   '20261121140000_duplicate_quotation.sql',
+  '20261121150000_quotation_cities.sql',
 ];
 
 /**

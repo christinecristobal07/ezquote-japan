@@ -1,0 +1,11 @@
+case_id,description,pax_adults,pax_children,services,addons,category,hotel_room_cost_php,change_rate_php,airfare_php,package_markup_type,package_markup_value,fx_jpy,expected_before_rounding,expected_final
+PD-001,4 pax quad with tour and transfer,4,0,mt_fuji_tour;airport_transfer,,quad,20000,0,0,,,0.5,19050,19099
+PD-002,Solo at a 6000 per-person twin rate,4,0,mt_fuji_tour;airport_transfer,,solo,6000,0,0,,,0.5,27050,27099
+PD-003,Quad with a 10 percent package markup,4,0,mt_fuji_tour;airport_transfer,,quad,20000,0,0,percent,10,0.5,20405,20499
+PD-004,Tour only with the entrance ticket add-on,4,0,mt_fuji_tour,Entrance ticket,quad,20000,0,0,,,0.5,15425,15499
+PD-005,Child rate at the adult tier,4,0,mt_fuji_tour;airport_transfer,,child,4000,0,0,,,0.5,17550,17599
+PD-006,Same quad quote after FX moves to 0.42,4,0,mt_fuji_tour;airport_transfer,,quad,20000,0,0,,,0.42,17682,17699
+PD-007,Quad with manual airfare,4,0,mt_fuji_tour;airport_transfer,,quad,20000,0,25000,,,0.5,44050,44099
+PD-008,Quad with a Change Rate surcharge,4,0,mt_fuji_tour;airport_transfer,,quad,20000,1500,0,,,0.5,20550,20599
+PD-009,Seven travellers drop to the 7-9 band,7,0,mt_fuji_tour;airport_transfer,,quad,20000,0,0,,,0.5,17169.5,17199
+PD-010,Triple sharing on the same 20000 room,4,0,mt_fuji_tour;airport_transfer,,triple,20000,0,0,,,0.5,20816.67,20899

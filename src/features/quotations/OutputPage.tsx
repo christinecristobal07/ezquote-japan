@@ -360,7 +360,10 @@ export function OutputPage() {
             }
           />
           <CardBody>
-            <div className="rounded-md bg-slate-50 p-4 text-sm whitespace-pre-wrap">
+            <div
+              data-testid="output-preview"
+              className="rounded-md bg-slate-50 p-4 text-sm whitespace-pre-wrap"
+            >
               {latest?.text ?? renderQuotation(model, 'full')}
             </div>
             {latest === null && (

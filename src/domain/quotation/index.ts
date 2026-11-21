@@ -41,6 +41,17 @@ export {
 } from './ledger.ts';
 
 export {
+  cityNames,
+  citySelectionError,
+  filterToCities,
+  inCityScope,
+  outOfCityScope,
+  MIN_CITIES,
+  type CityScoped,
+  type NamedCity,
+} from './cityScope.ts';
+
+export {
   diffSnapshots,
   type FxChange,
   type MarkupChange,
