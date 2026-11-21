@@ -267,7 +267,7 @@ describe('formatClosingBlock', () => {
     expect(
       formatClosingBlock({ agentName: 'Aira', badUrl: SURVEY_BAD, greatUrl: SURVEY_GREAT }),
     ).toBe(
-      `How would you rate my service?\nBAD \u{1F614}\u{1F614}\u{1F614} ${SURVEY_BAD}\nGREAT \u{1F929}\u{1F929}\u{1F929} ${SURVEY_GREAT}`,
+      `How would you rate my service?\nBAD \u{1F614}\u{1F614}\u{1F614}\n${SURVEY_BAD}\nGREAT \u{1F929}\u{1F929}\u{1F929}\n${SURVEY_GREAT}`,
     );
   });
 

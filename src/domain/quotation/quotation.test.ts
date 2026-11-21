@@ -38,6 +38,94 @@ const AIRPORT = service({
 });
 
 // -----------------------------------------------------------------------------
+// An unassigned tour must still reach the itinerary. It used to be dropped, so
+// an agent who ticked tours and never touched the day dropdowns sent a client a
+// quotation with no tours on its itinerary at all.
+// -----------------------------------------------------------------------------
+describe('unassigned tours', () => {
+  it('places a tour the agent never assigned onto a free day', () => {
+    const result = buildItinerary({
+      durationDays: 3,
+      services: [service({ serviceId: 'fuji', dayNumber: null })],
+      ...TEXTS,
+    });
+    const day2 = result.days.find((day) => day.dayNumber === 2);
+    expect(day2?.serviceIds).toEqual(['fuji']);
+    expect(day2?.kind).toBe('service');
+    expect(result.issues).toEqual([]);
+  });
+
+  it('spreads several unassigned tours across the free days in order', () => {
+    const result = buildItinerary({
+      durationDays: 5,
+      services: [
+        service({ serviceId: 'fuji', dayNumber: null }),
+        service({ serviceId: 'hakone', dayNumber: null }),
+        service({ serviceId: 'tokyo', dayNumber: null }),
+      ],
+      ...TEXTS,
+    });
+    expect(result.days.map((day) => day.serviceIds)).toEqual([
+      [],
+      ['fuji'],
+      ['hakone'],
+      ['tokyo'],
+      [],
+    ]);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('does not take a day an assigned tour already owns', () => {
+    const result = buildItinerary({
+      durationDays: 4,
+      services: [
+        service({ serviceId: 'fuji', dayNumber: null }),
+        service({ serviceId: 'hakone', dayNumber: 2 }),
+      ],
+      ...TEXTS,
+    });
+    expect(result.days.find((day) => day.dayNumber === 2)?.serviceIds).toEqual(['hakone']);
+    expect(result.days.find((day) => day.dayNumber === 3)?.serviceIds).toEqual(['fuji']);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('still flags a tour that has nowhere to go', () => {
+    // 3D2N has exactly one middle day, so the second tour cannot be placed.
+    const result = buildItinerary({
+      durationDays: 3,
+      services: [
+        service({ serviceId: 'fuji', dayNumber: null }),
+        service({ serviceId: 'hakone', dayNumber: null }),
+      ],
+      ...TEXTS,
+    });
+    expect(result.days.find((day) => day.dayNumber === 2)?.serviceIds).toEqual(['fuji']);
+    expect(result.issues).toEqual([{ code: 'UNASSIGNED_SERVICE', serviceId: 'hakone' }]);
+  });
+
+  it('leaves a transfer alone: it takes no day and rides arrival and departure', () => {
+    const result = buildItinerary({
+      durationDays: 3,
+      services: [AIRPORT, service({ serviceId: 'fuji', dayNumber: null })],
+      ...TEXTS,
+    });
+    expect(result.days[0]?.serviceIds).toEqual(['airport']);
+    expect(result.days[2]?.serviceIds).toEqual(['airport']);
+    expect(result.days[1]?.serviceIds).toEqual(['fuji']);
+  });
+
+  it('carries the tour text through, which is what the quotation prints', () => {
+    const result = buildItinerary({
+      durationDays: 3,
+      services: [service({ serviceId: 'fuji', dayNumber: null })],
+      ...TEXTS,
+    });
+    expect(result.days[1]?.title).toBe('MT. FUJI TOUR');
+    expect(result.days[1]?.body).toContain('Chureito Pagoda');
+  });
+});
+
+// -----------------------------------------------------------------------------
 describe('tourDayRange', () => {
   it.each([
     [3, [2]],
@@ -135,9 +223,12 @@ describe('buildItinerary', () => {
     expect(result.issues[0]).toMatchObject({ code: 'DAY_OUT_OF_RANGE', dayNumber });
   });
 
-  it('reports a day-consuming service with no day', () => {
+  it('places a day-consuming service with no day, rather than dropping it', () => {
     const result = buildItinerary({ durationDays: 4, services: [service()], ...TEXTS });
-    expect(result.issues).toEqual([{ code: 'UNASSIGNED_SERVICE', serviceId: 'svc-1' }]);
+    expect(result.days.find((day) => day.dayNumber === 2)?.serviceIds).toEqual(['svc-1']);
+    // Only a tour with nowhere left to go is still an issue; see
+    // "unassigned tours" above.
+    expect(result.issues).toEqual([]);
   });
 
   it('never lets a non-day-consuming service occupy a middle day', () => {

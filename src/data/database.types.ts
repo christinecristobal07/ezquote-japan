@@ -1088,6 +1088,10 @@ export type Database = {
       }
       duplicate_quotation: { Args: { p_quotation_id: string }; Returns: Json }
       preview_current_snapshot: { Args: never; Returns: Json }
+      reassign_quotation: {
+        Args: { p_agent_id: string; p_quotation_id: string }
+        Returns: string
+      }
       reorder_content: {
         Args: {
           p_ids: string[]

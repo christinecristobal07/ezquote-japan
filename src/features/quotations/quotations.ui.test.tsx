@@ -97,7 +97,8 @@ describe('DurationSection', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText('3D2N')).toBeInTheDocument();
+    expect(screen.getAllByText('3D2N').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Days/)).toHaveValue('3');
   });
 
   it('grows to 4D3N when a second tour is added', () => {
@@ -110,7 +111,8 @@ describe('DurationSection', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText('4D3N')).toBeInTheDocument();
+    expect(screen.getAllByText('4D3N').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Days/)).toHaveValue('4');
   });
 
   it('warns in manual mode when the tours do not fit', () => {
@@ -123,8 +125,10 @@ describe('DurationSection', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText('The tours do not fit')).toBeInTheDocument();
-    expect(screen.getByText(/need 5 days/)).toBeInTheDocument();
+    expect(screen.getByText('Add days and nights')).toBeInTheDocument();
+    expect(screen.getByText(/need 5 days but the trip is 3D2N/)).toBeInTheDocument();
+    expect(screen.getByText(/Add 2 more days/)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be generated/)).toBeInTheDocument();
   });
 
   it('warns past 7D6N', () => {
@@ -137,10 +141,12 @@ describe('DurationSection', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText('The tours do not fit')).toBeInTheDocument();
+    expect(screen.getByText('Add days and nights')).toBeInTheDocument();
   });
 
-  it('hides the day selector in derived mode', () => {
+  // The selector used to be hidden until the mode was switched to manual, so an
+  // agent looking at a derived 3D2N had nowhere to change it.
+  it('shows the day selector in derived mode too', () => {
     render(
       <DurationSection
         mode="derived"
@@ -150,7 +156,40 @@ describe('DurationSection', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.queryByLabelText('Days')).not.toBeInTheDocument();
+    const days = screen.getByLabelText(/Days/);
+    expect(days).toBeInTheDocument();
+    expect(days).toHaveValue('3');
+    expect(screen.getByText(/Pick a length to set it yourself/)).toBeInTheDocument();
+  });
+
+  it('switches to manual when a length is picked in derived mode', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DurationSection
+        mode="derived"
+        days={3}
+        services={[tour]}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText(/Days/), '5');
+    expect(onChange).toHaveBeenCalledWith('agent_selected', 5);
+  });
+
+  it('shows the derived length in the selector, not the stored one', () => {
+    // Derived mode ignores `days`; the selector must agree with the header.
+    render(
+      <DurationSection
+        mode="derived"
+        days={3}
+        services={[tour, tour, tour]}
+        disabled={false}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Days/)).toHaveValue('5');
   });
 
   it('matches resolveDuration exactly', () => {

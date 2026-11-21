@@ -116,28 +116,39 @@ export function DurationSection({
           </Select>
         </Field>
 
-        {mode === 'agent_selected' && (
-          <Field label="Days">
-            <Select
-              value={String(days)}
-              disabled={disabled}
-              onChange={(event) => {
-                onChange('agent_selected', Number(event.target.value));
-              }}
-            >
-              {[3, 4, 5, 6, 7].map((value) => (
-                <option key={value} value={value}>
-                  {value}D{value - 1}N
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
+        {/* Always shown. It used to appear only after the mode was switched
+            to "Choose manually", so an agent looking at a derived 3D2N had
+            nowhere to change it and no hint that the mode select was the way
+            in. Picking a length here switches the mode for them. */}
+        <Field
+          label="Days"
+          hint={
+            mode === 'derived'
+              ? 'Counted from the services. Pick a length to set it yourself.'
+              : 'Set by you. Switch to "Derived from services" to count it again.'
+          }
+        >
+          <Select
+            value={String(resolved.days)}
+            disabled={disabled}
+            onChange={(event) => {
+              onChange('agent_selected', Number(event.target.value));
+            }}
+          >
+            {[3, 4, 5, 6, 7].map((value) => (
+              <option key={value} value={value}>
+                {value}D{value - 1}N
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         {resolved.warnings.includes('TOURS_DO_NOT_FIT') && (
-          <Alert tone="warning" title="The tours do not fit">
-            These services need {resolved.requiredDays} days. Either lengthen the trip or remove a
-            tour.
+          <Alert tone="danger" title="Add days and nights">
+            These tours need {resolved.requiredDays} days but the trip is {resolved.label}. Add{' '}
+            {resolved.requiredDays - resolved.days} more day
+            {resolved.requiredDays - resolved.days === 1 ? '' : 's'}, or remove a tour. The
+            quotation cannot be generated until this is resolved.
           </Alert>
         )}
         {resolved.warnings.includes('EXCEEDS_MAX_DURATION') && (

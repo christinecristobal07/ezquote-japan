@@ -237,7 +237,7 @@ describe('the agent block', () => {
       buildQuotationModel(brdModelInput({ agentGreatUrl: null })),
       'full',
     );
-    expect(noGreat).toContain('BAD \u{1F614}\u{1F614}\u{1F614} https://bit.ly/AIRA-BAD');
+    expect(noGreat).toContain('BAD \u{1F614}\u{1F614}\u{1F614}\nhttps://bit.ly/AIRA-BAD');
     expect(noGreat).not.toContain('GREAT');
   });
 

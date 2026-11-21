@@ -20,6 +20,7 @@ import {
   defaultPackageTitle,
   ledgerView,
   outputFingerprint,
+  quotationValidity,
   renderQuotation,
   resolveDuration,
   toEngineInput,
@@ -195,7 +196,21 @@ export function OutputPage() {
       agentBadUrl: links.data?.badUrl ?? null,
       agentGreatUrl: links.data?.greatUrl ?? null,
       packageTitle: header.packageTitle ?? defaultPackageTitle(resolved.label),
-      validityLabel: settingText(settings.data, 'quotation.validity_label', ''),
+      // Derived from the earliest valid_until among the selected services. The
+      // typed setting is only a fallback for when no rate states an expiry, so
+      // the line cannot silently go blank and let a December booking through.
+      validityLabel:
+        quotationValidity(
+          selected.map((row) => {
+            const snap = snapshot.serviceById.get(row.serviceId);
+            return {
+              serviceId: row.serviceId,
+              name: snap?.name ?? row.serviceId,
+              validUntil: snap?.validUntil ?? null,
+            };
+          }),
+          header.travelDate,
+        ).label ?? settingText(settings.data, 'quotation.validity_label', ''),
       seasonLabel: header.seasonLabel,
       durationLabel: resolved.label,
       hotelCategory: header.hotelCategory ?? 3,

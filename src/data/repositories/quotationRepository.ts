@@ -557,3 +557,19 @@ export async function previewCurrentSnapshot(): Promise<RateSnapshot> {
   if (error) throw toContentError(error);
   return parseSnapshot(data);
 }
+
+/**
+ * Hands a quotation to another agent.
+ *
+ * A supervisor who builds a quote for a team member owns it, and `agent_id` is
+ * immutable, so the agent could not edit the quote that is theirs to sell. The
+ * database function does the authorising: supervisors of either side and
+ * managers may hand one over, nobody else, and the change is audited.
+ */
+export async function reassignQuotation(quotationId: string, agentId: string): Promise<void> {
+  const { error } = await supabase.rpc('reassign_quotation', {
+    p_quotation_id: quotationId,
+    p_agent_id: agentId,
+  });
+  if (error) throw toContentError(error);
+}

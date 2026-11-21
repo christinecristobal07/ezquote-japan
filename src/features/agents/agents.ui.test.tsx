@@ -189,7 +189,8 @@ describe('AgentEditor link validation', () => {
     renderEditor({});
     const preview = screen.getByText(/Hi my name is Aira/);
     expect(preview.textContent).toContain('How would you rate my service?');
-    expect(preview.textContent).toContain(`BAD \u{1F614}\u{1F614}\u{1F614} ${SURVEY_BAD}`);
+    // The URL sits on its own line, so chat apps auto-link it.
+    expect(preview.textContent).toContain(`BAD \u{1F614}\u{1F614}\u{1F614}\n${SURVEY_BAD}`);
   });
 
   it('offers Open buttons that cannot leak the opener', () => {

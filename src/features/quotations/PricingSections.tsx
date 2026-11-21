@@ -576,14 +576,25 @@ export function DetailedSummary({
   outputCategories,
   snapshot,
   onGenerate,
+  extraBlocking = [],
 }: {
   input: QuotationInput;
   outputCategories: readonly string[];
   snapshot: RateSnapshot;
   onGenerate?: () => void;
+  /**
+   * Reasons to refuse generating that the engine cannot see, because they are
+   * about the shape of the trip rather than its arithmetic — tours that need
+   * more days than the trip has, for one.
+   */
+  extraBlocking?: readonly string[];
 }) {
   const result = calculateQuotation(input);
-  const blocking = result.issues.filter((issue) => issue.severity === 'error');
+  const engineBlocking = result.issues.filter((issue) => issue.severity === 'error');
+  const blocking: string[] = [
+    ...engineBlocking.map((issue) => issue.code.replace(/_/g, ' ').toLowerCase()),
+    ...extraBlocking,
+  ];
   const shown = result.categories.filter((category) =>
     outputCategories.includes(category.paxCategory),
   );
@@ -595,8 +606,8 @@ export function DetailedSummary({
         {blocking.length > 0 && (
           <Alert tone="danger" title="Cannot price yet">
             <ul className="list-inside list-disc">
-              {blocking.map((issue, index) => (
-                <li key={index}>{issue.code.replace(/_/g, ' ').toLowerCase()}</li>
+              {blocking.map((reason) => (
+                <li key={reason}>{reason}</li>
               ))}
             </ul>
           </Alert>
@@ -608,11 +619,7 @@ export function DetailedSummary({
 
         <Button
           disabled={blocking.length > 0}
-          title={
-            blocking.length === 0
-              ? undefined
-              : `Fix first: ${blocking.map((issue) => issue.code).join(', ')}`
-          }
+          title={blocking.length === 0 ? undefined : `Fix first: ${blocking.join(', ')}`}
           onClick={onGenerate}
         >
           Generate quotation

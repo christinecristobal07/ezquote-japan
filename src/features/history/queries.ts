@@ -6,6 +6,7 @@ import {
   listQuotations,
   listRecentQuotations,
   previewCurrentSnapshot,
+  reassignQuotation,
   setQuotationStatus,
 } from '@/data/repositories/quotationRepository';
 import { quotationKeys } from '@/features/quotations/queries';
@@ -53,6 +54,15 @@ export function useSetQuotationStatus() {
   return useMutation({
     mutationFn: (input: { id: string; updatedAt: string; status: 'draft' | 'sent' | 'archived' }) =>
       setQuotationStatus(input.id, input.updatedAt, input.status),
+    onSuccess: () => client.invalidateQueries({ queryKey: quotationKeys.all }),
+  });
+}
+
+export function useReassignQuotation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; agentId: string }) =>
+      reassignQuotation(input.id, input.agentId),
     onSuccess: () => client.invalidateQueries({ queryKey: quotationKeys.all }),
   });
 }

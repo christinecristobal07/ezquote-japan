@@ -26,7 +26,9 @@ import {
   filterToCities,
   inCityScope,
   outOfCityScope,
+  quotationValidity,
   resolveDuration,
+  validityWarning,
   ledgerView,
   toEngineInput,
   type AdjustmentRecord,
@@ -73,6 +75,7 @@ import {
   LedgerTable,
 } from './PricingSections';
 import { CitiesField } from './CitiesField';
+import { OutputCategoriesField } from './OutputCategoriesField';
 import { SnapshotPanel } from './SnapshotPanel';
 import { saveStateLabel, useAutosave } from './useAutosave';
 
@@ -151,6 +154,23 @@ export function QuotationBuilderPage() {
   const serviceNames = useMemo(
     () => new Map((snapshot?.services ?? []).map((s) => [s.serviceId, s.name])),
     [snapshot],
+  );
+
+  /**
+   * How long these rates are good for, from the services actually selected.
+   * The quotation has to say so on its face, or a client books for December
+   * against rates that stopped at the end of October.
+   */
+  const validity = quotationValidity(
+    selected.map((row) => {
+      const snap = snapshot?.serviceById.get(row.serviceId);
+      return {
+        serviceId: row.serviceId,
+        name: snap?.name ?? row.serviceId,
+        validUntil: snap?.validUntil ?? null,
+      };
+    }),
+    header?.travelDate ?? null,
   );
 
   const cityIds = quotation.data?.cityIds ?? [];
@@ -326,6 +346,19 @@ export function QuotationBuilderPage() {
   const hotelsOutOfScope = outOfCityScope(chosenReferenceHotels, cityIds);
   const servicesOutOfScope = cards.filter((card) => card.outOfScope);
   const selectedCityNames = cityNames(cityIds, cities.data ?? []);
+  const validityNote = validityWarning(validity);
+
+  /**
+   * Reasons the quotation must not be generated. The tours-do-not-fit case is
+   * the supervisor's: every tour ticked on a 3-day trip used to produce a
+   * quotation whose itinerary quietly left most of them out.
+   */
+  const blockingReasons: string[] = [];
+  if (resolved.warnings.includes('TOURS_DO_NOT_FIT')) {
+    blockingReasons.push(
+      `these tours need ${String(resolved.requiredDays)} days but the trip is ${resolved.label} \u2014 add days and nights, or remove a tour`,
+    );
+  }
 
   return (
     <>
@@ -365,6 +398,20 @@ export function QuotationBuilderPage() {
         <Alert tone="info" className="mb-6">
           Viewing {serviceNames.get(header.agentId) ?? 'another agent'}&apos;s quotation
           (read-only).
+        </Alert>
+      )}
+
+      {validityNote !== null && (
+        <Alert
+          tone={validity.travelDateOutside ? 'danger' : 'warning'}
+          title={
+            validity.travelDateOutside
+              ? 'Travel date is past the rate validity'
+              : 'No rate validity to show'
+          }
+          className="mb-6"
+        >
+          {validityNote}
         </Alert>
       )}
 
@@ -708,32 +755,16 @@ export function QuotationBuilderPage() {
                 />
               </Field>
 
-              <fieldset>
-                <legend className="mb-1 text-sm font-medium text-slate-700">
-                  Categories to show
-                </legend>
-                <div className="flex flex-wrap gap-3">
-                  {ALL_CATEGORIES.map((category) => {
-                    const checked = header.outputCategories.includes(category);
-                    const last = checked && header.outputCategories.length === 1;
-                    return (
-                      <Checkbox
-                        key={category}
-                        label={category.replace('_', ' ')}
-                        checked={checked}
-                        disabled={readOnly || last}
-                        onChange={(event) => {
-                          headerSave.push({
-                            outputCategories: event.target.checked
-                              ? [...header.outputCategories, category]
-                              : header.outputCategories.filter((value) => value !== category),
-                          });
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </fieldset>
+              <OutputCategoriesField
+                categories={ALL_CATEGORIES}
+                selected={header.outputCategories}
+                adults={header.paxAdults}
+                children={header.paxChildren}
+                disabled={readOnly}
+                onChange={(next) => {
+                  headerSave.push({ outputCategories: next as typeof header.outputCategories });
+                }}
+              />
             </CardBody>
           </Card>
 
@@ -749,6 +780,7 @@ export function QuotationBuilderPage() {
           input={engineInput}
           outputCategories={header.outputCategories}
           snapshot={snapshot}
+          extraBlocking={blockingReasons}
         />
       </div>
 

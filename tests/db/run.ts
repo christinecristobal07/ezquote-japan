@@ -1570,6 +1570,181 @@ async function main(): Promise<void> {
     );
   });
 
+  // ---------------------------------------------------------------------------
+  section('Reassigning a quotation');
+
+  let handoverId = '';
+
+  await check('agent_id is still immutable for an ordinary update', async () => {
+    const row = await one<{ id: string }>(
+      db,
+      `insert into public.quotations (reference_no, agent_id, hotel_category)
+       values ('', $1, 3) returning id`,
+      [ids.supervisorProfile],
+    );
+    handoverId = row.id;
+
+    await assertRejects(
+      () =>
+        db.query(`update public.quotations set agent_id = $1 where id = $2`, [
+          ids.agentProfile,
+          handoverId,
+        ]),
+      /can only be reassigned with reassign_quotation/,
+    );
+  });
+
+  await check('a supervisor hands their quotation to a team member', async () => {
+    await asUser(
+      db,
+      ids.supervisorAuth,
+      async () => {
+        await db.query(`select public.reassign_quotation($1, $2)`, [handoverId, ids.agentProfile]);
+      },
+      { commit: true },
+    );
+
+    const owner = await one<{ agent_id: string }>(
+      db,
+      `select agent_id from public.quotations where id = $1`,
+      [handoverId],
+    );
+    assertEqual(owner.agent_id, ids.agentProfile, 'the quotation now belongs to the agent');
+  });
+
+  await check('and the agent can now edit it', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        await db.query(`update public.quotations set client_name = $1 where id = $2`, [
+          'Edited by the agent',
+          handoverId,
+        ]);
+      },
+      { commit: true },
+    );
+    const row = await one<{ client_name: string }>(
+      db,
+      `select client_name from public.quotations where id = $1`,
+      [handoverId],
+    );
+    assertEqual(row.client_name, 'Edited by the agent', 'the agent edited their own quotation');
+  });
+
+  await check('the reference number and snapshot survive the handover', async () => {
+    const row = await one<{ reference_no: string; jpy: string }>(
+      db,
+      `select reference_no, (snapshot -> 'fx' ->> 'JPY') as jpy
+       from public.quotations where id = $1`,
+      [handoverId],
+    );
+    assert(/^JPN-\d{4}-\d{6}$/.test(row.reference_no), 'the reference is unchanged');
+    assertEqual(Number(row.jpy), 0.42, 'the snapshot is unchanged');
+  });
+
+  await check('the handover is written to the audit log', async () => {
+    const n = await count(
+      db,
+      `select count(*)::int as n from public.audit_log
+       where table_name = 'quotations' and record_id = $1 and action = 'UPDATE'`,
+      [handoverId],
+    );
+    assert(n > 0, 'the change was audited');
+  });
+
+  await check('an agent cannot push their quotation onto someone else', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reassign_quotation($1, $2)`, [handoverId, ids.otherAgentProfile]),
+        /cannot reassign this quotation/,
+      );
+    });
+  });
+
+  await check('an unrelated agent cannot take a quotation they cannot see', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reassign_quotation($1, $2)`, [handoverId, ids.otherAgentProfile]),
+        /was not found, or you cannot see it/,
+      );
+    });
+  });
+
+  await check('a manager can reassign anything', async () => {
+    await asUser(
+      db,
+      ids.managerAuth,
+      async () => {
+        await db.query(`select public.reassign_quotation($1, $2)`, [
+          handoverId,
+          ids.supervisorProfile,
+        ]);
+      },
+      { commit: true },
+    );
+    const owner = await one<{ agent_id: string }>(
+      db,
+      `select agent_id from public.quotations where id = $1`,
+      [handoverId],
+    );
+    assertEqual(owner.agent_id, ids.supervisorProfile, 'the manager moved it back');
+  });
+
+  await check('a quotation cannot be assigned to a deactivated profile', async () => {
+    const inactive = await one<{ id: string }>(
+      db,
+      `select p.id from public.profiles p
+       join auth.users u on u.email = p.email
+       where u.id = $1`,
+      [ids.inactiveAuth],
+    );
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.reassign_quotation($1, $2)`, [handoverId, inactive.id]),
+        /deactivated/,
+      );
+    });
+  });
+
+  await check('reassigning to the current owner says so rather than doing nothing', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reassign_quotation($1, $2)`, [handoverId, ids.supervisorProfile]),
+        /already belongs to/,
+      );
+    });
+  });
+
+  await check('an unknown agent is refused', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reassign_quotation($1, $2)`, [
+            handoverId,
+            '00000000-0000-4000-8000-000000000000',
+          ]),
+        /does not exist/,
+      );
+    });
+  });
+
+  await check('the immutability flag does not leak to the next statement', async () => {
+    // set_config(..., true) is transaction-local; once the reassign is done an
+    // ordinary update must be refused again.
+    await assertRejects(
+      () =>
+        db.query(`update public.quotations set agent_id = $1 where id = $2`, [
+          ids.agentProfile,
+          handoverId,
+        ]),
+      /can only be reassigned with reassign_quotation/,
+    );
+  });
+
   await db.close();
   process.exitCode = summary();
 }

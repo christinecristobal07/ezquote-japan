@@ -31,9 +31,15 @@ import type { DuplicateResult, QuotationListRow } from '@/data/repositories/quot
 import { useAuth } from '@/features/auth/useAuth';
 import { useAgents } from '@/features/agents/queries';
 import { HistoryFilters } from './HistoryFilters';
+import { ReassignDialog, type ReassignTarget } from './ReassignDialog';
 import { RequoteDialog } from './RequoteDialog';
 import { STATUS_LABELS } from './statusLabels';
-import { useDuplicateQuotation, useQuotationList, useSetQuotationStatus } from './queries';
+import {
+  useDuplicateQuotation,
+  useQuotationList,
+  useReassignQuotation,
+  useSetQuotationStatus,
+} from './queries';
 
 function day(value: string | null): string {
   if (value === null) return '—';
@@ -90,6 +96,7 @@ export function QuotationHistory({ title, description, scope }: QuotationHistory
   const { profile } = useAuth();
 
   const [requoted, setRequoted] = useState<DuplicateResult | null>(null);
+  const [reassigning, setReassigning] = useState<ReassignTarget | null>(null);
 
   const showAgentFilter = scope === 'team';
   const agents = useAgents();
@@ -101,6 +108,12 @@ export function QuotationHistory({ title, description, scope }: QuotationHistory
   const list = useQuotationList(filters);
   const duplicate = useDuplicateQuotation();
   const setStatus = useSetQuotationStatus();
+  const reassign = useReassignQuotation();
+
+  // Only a supervisor or a manager may hand a quotation over, and the database
+  // enforces that; offering the action to an agent who will only be refused is
+  // worse than not offering it.
+  const canReassign = profile !== null && can(profile.role, 'quotation.viewTeam');
 
   function applyFilters(next: QuotationFilters): void {
     setParams(quotationFiltersToParams(scope === 'mine' ? { ...next, agentId: '' } : next), {
@@ -227,6 +240,20 @@ export function QuotationHistory({ title, description, scope }: QuotationHistory
                 Requote with current rates
               </DropdownMenuItem>
             )}
+            {canReassign && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  setReassigning({
+                    id: row.id,
+                    referenceNo: row.referenceNo,
+                    agentId: row.agentId,
+                    agentName: row.agentName,
+                  });
+                }}
+              >
+                Reassign to agent
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => {
                 setStatus.mutate(
@@ -339,6 +366,29 @@ export function QuotationHistory({ title, description, scope }: QuotationHistory
           </span>
         </nav>
       )}
+
+      <ReassignDialog
+        quotation={reassigning}
+        agents={(agents.data ?? []).map((agent) => ({ id: agent.id, name: agent.fullName }))}
+        busy={reassign.isPending}
+        onCancel={() => {
+          setReassigning(null);
+        }}
+        onConfirm={(agentId) => {
+          if (reassigning === null) return;
+          const reference = reassigning.referenceNo;
+          reassign.mutate(
+            { id: reassigning.id, agentId },
+            {
+              onSuccess: () => {
+                setReassigning(null);
+                toast.success(`${reference} reassigned.`);
+              },
+              onError: reportError,
+            },
+          );
+        }}
+      />
 
       <RequoteDialog
         result={requoted}

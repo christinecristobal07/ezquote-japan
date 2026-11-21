@@ -41,6 +41,24 @@ export {
 } from './ledger.ts';
 
 export {
+  categoryFit,
+  categoryFits,
+  fitHint,
+  unfitSelected,
+  type CategoryFit,
+  type OccupancyCode,
+} from './occupancy.ts';
+
+export {
+  formatValidityDate,
+  quotationValidity,
+  validityWarning,
+  VALIDITY_PREFIX,
+  type QuotationValidity,
+  type ValidityService,
+} from './validity.ts';
+
+export {
   cityNames,
   citySelectionError,
   filterToCities,

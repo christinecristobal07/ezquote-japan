@@ -61,6 +61,37 @@ export function buildItinerary(input: ItineraryInput): ItineraryResult {
   const lastDay = durationDays;
   const middle = new Set(tourDayRange(durationDays));
 
+  /**
+   * A tour the agent has not put on a day yet still belongs in the itinerary.
+   *
+   * It used to be dropped: an agent who ticked three tours and never touched
+   * the day dropdowns got a quotation whose itinerary showed arrival, free
+   * days and departure, with no tours on it at all. Nothing said why. So
+   * unassigned tours take the free middle days in order, and the dropdown
+   * becomes a way to override that rather than a step you must remember.
+   *
+   * Anything still left over has nowhere to go, and that is a real problem
+   * the agent has to resolve, so it keeps raising UNASSIGNED_SERVICE.
+   */
+  const taken = new Set(
+    input.services
+      .filter((service) => service.consumesDay && service.dayNumber !== null)
+      .map((service) => service.dayNumber),
+  );
+  const freeDays = tourDayRange(durationDays).filter((day) => !taken.has(day));
+  const placed = new Map<string, number>();
+  for (const service of input.services) {
+    if (!service.consumesDay || service.dayNumber !== null) continue;
+    const day = freeDays.shift();
+    if (day === undefined) break;
+    placed.set(service.serviceId, day);
+  }
+
+  const services = input.services.map((service) => {
+    const day = placed.get(service.serviceId);
+    return day === undefined ? service : { ...service, dayNumber: day };
+  });
+
   /** dayNumber -> services that own it. */
   const owners = new Map<number, ItineraryService[]>();
   /** Services listed on a day without owning it. */
@@ -70,7 +101,7 @@ export function buildItinerary(input: ItineraryInput): ItineraryResult {
     passengers.set(day, [...(passengers.get(day) ?? []), service]);
   }
 
-  for (const service of input.services) {
+  for (const service of services) {
     if (!service.consumesDay) {
       if (service.dayNumber === null) {
         addPassenger(1, service);

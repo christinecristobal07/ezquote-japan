@@ -13,8 +13,15 @@ export interface ClosingBlockInput {
 }
 
 export const RATE_MY_SERVICE_HEADING = 'How would you rate my service?';
-export const BAD_PREFIX = 'BAD \u{1F614}\u{1F614}\u{1F614} ';
-export const GREAT_PREFIX = 'GREAT \u{1F929}\u{1F929}\u{1F929} ';
+/**
+ * The URL goes on its own line, exactly as the Rate My Service workbook has
+ * always had it. Messenger, Viber, Gmail and Outlook all turn a bare URL at the
+ * start of a line into a link; sharing the line with the emoji prefix leaves it
+ * to each app's guesswork, and a survey link a client cannot click is a survey
+ * nobody answers.
+ */
+export const BAD_PREFIX = 'BAD \u{1F614}\u{1F614}\u{1F614}\n';
+export const GREAT_PREFIX = 'GREAT \u{1F929}\u{1F929}\u{1F929}\n';
 
 /** The greeting line that opens the quotation. */
 export function formatGreeting(agentName: string): string {
