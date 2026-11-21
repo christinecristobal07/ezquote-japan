@@ -14,7 +14,7 @@ import {
   IconButton,
   Input,
   Select,
-  Spinner,
+  PageSpinner,
   Textarea,
   useToast,
 } from '@/components/ui';
@@ -109,7 +109,7 @@ export function PackageTextPage() {
     );
   }
 
-  if (items.isPending || services.isPending) return <Spinner label="Loading content…" />;
+  if (items.isPending || services.isPending) return <PageSpinner label="Loading content…" />;
 
   const bodyError = draft !== null && draft.body.trim() === '' ? 'Say something.' : undefined;
   const windowError =

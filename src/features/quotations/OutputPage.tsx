@@ -10,6 +10,7 @@ import {
   CardHeader,
   Dialog,
   PageHeader,
+  PageSpinner,
   Spinner,
   Textarea,
   useToast,
@@ -267,7 +268,7 @@ export function OutputPage() {
     snapshot,
   ]);
 
-  if (quotation.isPending || profile === null) return <Spinner label="Loading quotation…" />;
+  if (quotation.isPending || profile === null) return <PageSpinner label="Loading quotation…" />;
   if (header === null || model === null) {
     return (
       <>

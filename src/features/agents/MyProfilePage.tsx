@@ -1,6 +1,15 @@
 import { ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Badge, Card, CardBody, CardHeader, PageHeader, Spinner } from '@/components/ui';
+import {
+  Alert,
+  Badge,
+  Card,
+  CardBody,
+  CardHeader,
+  PageHeader,
+  PageSpinner,
+  Spinner,
+} from '@/components/ui';
 import { supabase } from '@/data/supabaseClient';
 import { formatClosingBlock } from '@/domain';
 import { ROLE_LABELS } from '@/app/roleLabels';
@@ -57,7 +66,7 @@ export function MyProfilePage() {
     enabled: profile !== null,
   });
 
-  if (profile === null) return <Spinner label="Loading your profile…" />;
+  if (profile === null) return <PageSpinner label="Loading your profile…" />;
 
   return (
     <>

@@ -23,7 +23,7 @@ export { PageHeader } from './PageHeader';
 export { APP_NAME, usePageTitle } from './usePageTitle';
 export { Select } from './Select';
 export { Skeleton } from './Skeleton';
-export { FullPageSpinner, Spinner } from './Spinner';
+export { FullPageSpinner, PageSpinner, Spinner } from './Spinner';
 export { Textarea } from './Textarea';
 export { Tooltip, TooltipProvider } from './Tooltip';
 export { ToastProvider } from './toast';

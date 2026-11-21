@@ -7,8 +7,11 @@ export interface Column<Row> {
   readonly key: string;
   readonly header: ReactNode;
   readonly cell: (row: Row) => ReactNode;
-  /** Right-align money and counts. */
-  readonly align?: 'left' | 'right';
+  /**
+   * Centred by default, which is how the team reads these tables. Action
+   * columns stay right, and long free text is easier to scan left.
+   */
+  readonly align?: 'left' | 'center' | 'right';
   readonly className?: string;
 }
 
@@ -22,6 +25,12 @@ export interface DataTableProps<Row> {
   loadingRows?: number;
   empty?: ReactNode;
   className?: string;
+}
+
+function alignClass(align: Column<unknown>['align']): string {
+  if (align === 'right') return 'text-right';
+  if (align === 'left') return 'text-left';
+  return 'text-center';
 }
 
 export function DataTable<Row>({
@@ -48,7 +57,7 @@ export function DataTable<Row>({
                 scope="col"
                 className={cn(
                   'px-3 py-2 text-xs font-semibold tracking-wide text-slate-600 uppercase',
-                  column.align === 'right' ? 'text-right' : 'text-left',
+                  alignClass(column.align),
                   column.className,
                 )}
               >
@@ -76,8 +85,8 @@ export function DataTable<Row>({
                   <td
                     key={column.key}
                     className={cn(
-                      'px-3 py-2.5 text-slate-800',
-                      column.align === 'right' ? 'text-right' : 'text-left',
+                      'px-3 py-2.5 align-middle text-slate-800',
+                      alignClass(column.align),
                       column.className,
                     )}
                   >

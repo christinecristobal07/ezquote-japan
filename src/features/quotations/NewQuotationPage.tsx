@@ -99,7 +99,7 @@ export function NewQuotationPage() {
         description="A few details to start. Everything else is set in the builder."
       />
 
-      <Card className="max-w-2xl">
+      <Card>
         <CardHeader title="Trip basics" />
         <CardBody className="space-y-4">
           <Alert tone="info">

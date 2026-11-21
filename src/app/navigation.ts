@@ -100,3 +100,26 @@ export function visibleNavGroups(role: Role): readonly NavGroup[] {
     items: items.filter((item) => item.group === name),
   })).filter((group) => group.items.length > 0);
 }
+
+/**
+ * Which nav item should look active for a given URL.
+ *
+ * A NavLink highlights on a prefix match, so "/quotations" lit up while the
+ * agent was on "/quotations/new" — two items active at once, and neither
+ * obviously the one they had clicked. The most specific item wins instead:
+ * "/quotations/new" owns its own URL, while "/quotations/<id>" still belongs
+ * to "Quotations", which is where an agent would look for an open quotation.
+ */
+export function activeNavPath(pathname: string, paths: readonly string[]): string | null {
+  const current = pathname.replace(/\/+$/, '') || '/';
+
+  const matches = paths.filter((path) => {
+    if (path === '/') return current === '/';
+    const base = path.replace(/\/+$/, '');
+    // A segment boundary, so "/quotations" does not match "/quotationsfoo".
+    return current === base || current.startsWith(`${base}/`);
+  });
+
+  if (matches.length === 0) return null;
+  return matches.reduce((best, path) => (path.length > best.length ? path : best));
+}

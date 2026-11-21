@@ -9,7 +9,7 @@ import {
   Checkbox,
   Field,
   Input,
-  Spinner,
+  PageSpinner,
   Textarea,
   useToast,
 } from '@/components/ui';
@@ -79,7 +79,7 @@ export function SettingsPage() {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [errors, setErrors] = useState<Partial<Record<SettingKey, string>>>({});
 
-  if (settings.isPending || services.isPending) return <Spinner label="Loading settings…" />;
+  if (settings.isPending || services.isPending) return <PageSpinner label="Loading settings…" />;
 
   const byKey = new Map((settings.data ?? []).map((row) => [row.key, row.value]));
   const currentCodes = codes ?? asCodes(byKey.get('quotation.default_service_codes'));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { visibleNavGroups, visibleNavItems } from './navigation.ts';
+import { activeNavPath, visibleNavGroups, visibleNavItems } from './navigation.ts';
 import type { Role } from '@/domain/permissions';
 
 function labels(role: Role): string[] {
@@ -78,5 +78,69 @@ describe('visibleNavGroups', () => {
         expect(group.items.length).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Only the most specific item lights up. "/quotations" used to stay highlighted
+// while the agent was on "/quotations/new", so two tabs looked active at once.
+// -----------------------------------------------------------------------------
+describe('activeNavPath', () => {
+  const PATHS = [
+    '/',
+    '/quotations/new',
+    '/quotations',
+    '/team/quotations',
+    '/admin/rates',
+    '/admin/rates/fx',
+    '/admin/content',
+    '/me',
+    '/audit',
+  ];
+
+  it('picks the more specific item for the new-quotation page', () => {
+    expect(activeNavPath('/quotations/new', PATHS)).toBe('/quotations/new');
+  });
+
+  it('keeps an open quotation under Quotations', () => {
+    expect(activeNavPath('/quotations/0f2a6f2e-0000-4000-8000-000000000001', PATHS)).toBe(
+      '/quotations',
+    );
+  });
+
+  it('keeps the output page under Quotations too', () => {
+    expect(activeNavPath('/quotations/abc/output', PATHS)).toBe('/quotations');
+  });
+
+  it('matches the list itself', () => {
+    expect(activeNavPath('/quotations', PATHS)).toBe('/quotations');
+  });
+
+  it('only matches the dashboard exactly', () => {
+    expect(activeNavPath('/', PATHS)).toBe('/');
+    expect(activeNavPath('/audit', PATHS)).toBe('/audit');
+  });
+
+  it('picks the deeper admin item', () => {
+    expect(activeNavPath('/admin/rates/fx', PATHS)).toBe('/admin/rates/fx');
+    expect(activeNavPath('/admin/rates', PATHS)).toBe('/admin/rates');
+    // A service rate page still belongs to Rates & FX.
+    expect(activeNavPath('/admin/rates/some-service-id', PATHS)).toBe('/admin/rates');
+  });
+
+  it('does not match across a partial segment', () => {
+    expect(activeNavPath('/quotationsfoo', PATHS)).toBeNull();
+  });
+
+  it('ignores a trailing slash', () => {
+    expect(activeNavPath('/quotations/', PATHS)).toBe('/quotations');
+  });
+
+  it('returns nothing for a path no item owns', () => {
+    expect(activeNavPath('/nowhere', PATHS)).toBeNull();
+  });
+
+  it('keeps the team list separate from the agent one', () => {
+    expect(activeNavPath('/team/quotations', PATHS)).toBe('/team/quotations');
   });
 });

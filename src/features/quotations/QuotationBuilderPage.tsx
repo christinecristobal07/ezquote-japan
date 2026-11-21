@@ -13,7 +13,7 @@ import {
   Input,
   PageHeader,
   Select,
-  Spinner,
+  PageSpinner,
   Tooltip,
   useToast,
 } from '@/components/ui';
@@ -185,7 +185,7 @@ export function QuotationBuilderPage() {
     [serviceMeta.data],
   );
 
-  if (quotation.isPending || profile === null) return <Spinner label="Loading quotation…" />;
+  if (quotation.isPending || profile === null) return <PageSpinner label="Loading quotation…" />;
   if (quotation.error !== null) {
     return (
       <Alert tone="danger" title="Could not load this quotation">

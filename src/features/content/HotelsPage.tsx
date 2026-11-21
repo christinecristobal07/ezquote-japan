@@ -13,7 +13,7 @@ import {
   Field,
   Input,
   Select,
-  Spinner,
+  PageSpinner,
   Textarea,
   useToast,
 } from '@/components/ui';
@@ -90,7 +90,7 @@ export function HotelsPage() {
     setEditing({ hotel });
   }
 
-  if (hotels.isPending || cities.isPending) return <Spinner label="Loading hotels…" />;
+  if (hotels.isPending || cities.isPending) return <PageSpinner label="Loading hotels…" />;
 
   const nameError = draft !== null && draft.name.trim() === '' ? 'A name is required.' : undefined;
 

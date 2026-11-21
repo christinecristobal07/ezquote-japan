@@ -11,7 +11,7 @@ import {
   Dialog,
   Field,
   Input,
-  Spinner,
+  PageSpinner,
   Textarea,
   useToast,
 } from '@/components/ui';
@@ -129,7 +129,7 @@ export function ReferencePage() {
   }
 
   if (cities.isPending || operators.isPending || sites.isPending) {
-    return <Spinner label="Loading reference data…" />;
+    return <PageSpinner label="Loading reference data…" />;
   }
 
   const activeBadge = (isActive: boolean) => (

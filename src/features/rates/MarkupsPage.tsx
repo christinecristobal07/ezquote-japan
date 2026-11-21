@@ -12,7 +12,7 @@ import {
   Input,
   PageHeader,
   Select,
-  Spinner,
+  PageSpinner,
   useToast,
 } from '@/components/ui';
 import { currentAndScheduled } from '@/domain';
@@ -165,7 +165,7 @@ export function MarkupsPage() {
     }
   }
 
-  if (categories.isPending || services.isPending) return <Spinner label="Loading markups…" />;
+  if (categories.isPending || services.isPending) return <PageSpinner label="Loading markups…" />;
 
   return (
     <>

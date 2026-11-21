@@ -1,6 +1,6 @@
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import type { Role } from '@/domain/permissions';
-import { visibleNavGroups } from '@/app/navigation';
+import { activeNavPath, visibleNavGroups, visibleNavItems } from '@/app/navigation';
 import { cn } from '@/lib/cn';
 
 export function SidebarNav({
@@ -14,6 +14,13 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const groups = visibleNavGroups(role);
+  const { pathname } = useLocation();
+  // Decided here rather than per-link: only the most specific item lights up,
+  // so "New quotation" does not also highlight "Quotations".
+  const active = activeNavPath(
+    pathname,
+    visibleNavItems(role).map((item) => item.path),
+  );
 
   return (
     <nav aria-label="Main" className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
@@ -32,15 +39,14 @@ export function SidebarNav({
                   end={item.path === '/'}
                   onClick={onNavigate}
                   title={collapsed ? item.label : undefined}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                      collapsed && 'justify-center px-2',
-                      isActive
-                        ? 'bg-brand-50 text-brand-900 font-medium'
-                        : 'text-slate-700 hover:bg-slate-100',
-                    )
-                  }
+                  aria-current={item.path === active ? 'page' : undefined}
+                  className={cn(
+                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                    collapsed && 'justify-center px-2',
+                    item.path === active
+                      ? 'bg-brand-50 text-brand-900 font-medium'
+                      : 'text-slate-700 hover:bg-slate-100',
+                  )}
                 >
                   {({ isActive }) => (
                     <>

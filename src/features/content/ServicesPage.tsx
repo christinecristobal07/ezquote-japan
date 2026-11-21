@@ -11,7 +11,7 @@ import {
   Field,
   Input,
   Select,
-  Spinner,
+  PageSpinner,
   useToast,
 } from '@/components/ui';
 import { ContentError } from '@/data/repositories/contentRepository';
@@ -104,7 +104,7 @@ export function ServicesPage() {
   }
 
   if (services.isPending || cities.isPending || operators.isPending) {
-    return <Spinner label="Loading services…" />;
+    return <PageSpinner label="Loading services…" />;
   }
 
   if (editing !== null) {

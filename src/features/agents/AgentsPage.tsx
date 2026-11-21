@@ -12,7 +12,7 @@ import {
   Input,
   PageHeader,
   Select,
-  Spinner,
+  PageSpinner,
   useToast,
 } from '@/components/ui';
 import { isManager, type Role } from '@/domain/permissions';
@@ -110,7 +110,7 @@ export function AgentsPage() {
     toast.error(caught instanceof ContentError ? caught.message : 'Something went wrong.');
   }
 
-  if (agents.isPending || profile === null) return <Spinner label="Loading agents…" />;
+  if (agents.isPending || profile === null) return <PageSpinner label="Loading agents…" />;
 
   if (editing !== null && values !== null) {
     return (

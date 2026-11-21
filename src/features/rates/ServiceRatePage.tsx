@@ -12,6 +12,7 @@ import {
   Input,
   MoneyText,
   PageHeader,
+  PageSpinner,
   Spinner,
   Textarea,
   useToast,
@@ -158,7 +159,7 @@ export function ServiceRatePage() {
     if (current) serviceMarkups[type] = { type: current.markupType, value: current.value };
   }
 
-  if (services.isPending) return <Spinner label="Loading service…" />;
+  if (services.isPending) return <PageSpinner label="Loading service…" />;
   if (service === null) {
     return (
       <>
