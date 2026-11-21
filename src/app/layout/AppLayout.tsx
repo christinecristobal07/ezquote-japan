@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Outlet } from 'react-router';
-import { ChevronLeft, ChevronRight, LogOut, Menu, X } from 'lucide-react';
+import { Outlet, useNavigate } from 'react-router';
+import { ChevronLeft, ChevronRight, LogOut, Menu, UserRound, X } from 'lucide-react';
 import {
   Badge,
   DropdownMenu,
@@ -30,6 +30,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 
 export function AppLayout() {
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
@@ -107,6 +108,16 @@ export function AppLayout() {
                 </Badge>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  void navigate('/me');
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <UserRound aria-hidden="true" className="h-4 w-4" />
+                  My profile
+                </span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 danger
                 onSelect={() => {

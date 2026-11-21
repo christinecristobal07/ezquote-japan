@@ -905,6 +905,209 @@ async function main(): Promise<void> {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  section('Agent management');
+
+  await check('an agent calling agent_login_status is refused', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () => db.query(`select * from public.agent_login_status()`),
+        /Only managers can read agent login status/,
+      );
+    });
+  });
+
+  await check('a supervisor is refused too', async () => {
+    await asUser(db, ids.supervisorAuth, async () => {
+      await assertRejects(
+        () => db.query(`select * from public.agent_login_status()`),
+        /Only managers/,
+      );
+    });
+  });
+
+  await check('a manager gets a row per profile, with login details', async () => {
+    await db.query(
+      `update auth.users set email_confirmed_at = now(), last_sign_in_at = now()
+       where email = 'agent@gladex.test'`,
+    );
+    await asUser(db, ids.managerAuth, async () => {
+      const total = await count(db, `select count(*)::int as n from public.agent_login_status()`);
+      const profiles = await count(db, `select count(*)::int as n from public.profiles`);
+      assertEqual(total, profiles, 'rows returned');
+
+      const confirmed = await count(
+        db,
+        `select count(*)::int as n from public.agent_login_status()
+         where email_confirmed_at is not null`,
+      );
+      assert(confirmed >= 1, 'the confirmed agent should be reported');
+    });
+  });
+
+  await check('invited_at and invited_by can be recorded by a manager', async () => {
+    await asUser(
+      db,
+      ids.managerAuth,
+      async () => {
+        await db.query(
+          `update public.profiles set invited_at = now(), invited_by = $1 where id = $2`,
+          [ids.managerProfile, ids.otherAgentProfile],
+        );
+      },
+      { commit: true },
+    );
+    const row = await one<{ invited_by: string | null }>(
+      db,
+      `select invited_by from public.profiles where id = $1`,
+      [ids.otherAgentProfile],
+    );
+    assertEqual(row.invited_by, ids.managerProfile, 'invited_by');
+  });
+
+  await check('an agent cannot change their own survey links', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      const result = await db.query(
+        `update public.agent_survey_links set bad_url = 'https://bit.ly/hacked' where profile_id = $1`,
+        [ids.agentProfile],
+      );
+      assertEqual(result.affectedRows ?? 0, 0, 'rows updated');
+    });
+    const row = await one<{ bad_url: string }>(
+      db,
+      `select bad_url from public.agent_survey_links where profile_id = $1`,
+      [ids.agentProfile],
+    );
+    assertEqual(row.bad_url, 'https://bit.ly/a-bad', 'link after the attempt');
+  });
+
+  await check(
+    'Product Development cannot set super_admin (already covered, re-checked here)',
+    async () => {
+      await asUser(db, ids.prodDevAuth, async () => {
+        await assertRejects(
+          () =>
+            db.query(`update public.profiles set role = 'super_admin' where id = $1`, [
+              ids.agentProfile,
+            ]),
+          /Only a Super Admin/,
+        );
+      });
+    },
+  );
+
+  await check('a manager cannot deactivate themselves', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`update public.profiles set is_active = false where id = $1`, [
+            ids.managerProfile,
+          ]),
+        /cannot change your own role or deactivate yourself/,
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  section('Quotation service selection');
+
+  await check('the owner can set services and add-ons in one call', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        await db.query(`select public.set_quotation_services($1, $2::jsonb)`, [
+          quoteId,
+          JSON.stringify([{ serviceId: ids.tourService, dayNumber: 2, sortOrder: 1 }]),
+        ]);
+      },
+      { commit: true },
+    );
+    const n = await count(
+      db,
+      `select count(*)::int as n from public.quotation_services where quotation_id = $1`,
+      [quoteId],
+    );
+    assertEqual(n, 1, 'selected services');
+  });
+
+  await check('calling it again replaces the previous selection', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        await db.query(`select public.set_quotation_services($1, $2::jsonb)`, [
+          quoteId,
+          JSON.stringify([
+            { serviceId: ids.tourService, dayNumber: 2, sortOrder: 1 },
+            { serviceId: ids.transferService, dayNumber: null, sortOrder: 2 },
+          ]),
+        ]);
+      },
+      { commit: true },
+    );
+    const rows = await db.query<{ service_id: string }>(
+      `select service_id from public.quotation_services where quotation_id = $1 order by sort_order`,
+      [quoteId],
+    );
+    assertEqual(rows.rows.length, 2, 'selected services');
+  });
+
+  await check('another agent cannot set services on this quotation', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.set_quotation_services($1, $2::jsonb)`, [
+            quoteId,
+            JSON.stringify([{ serviceId: ids.tourService, dayNumber: 2, sortOrder: 1 }]),
+          ]),
+        /cannot change this quotation/,
+      );
+    });
+  });
+
+  await check('an empty list from another agent is refused, not silently accepted', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.set_quotation_services($1, '[]'::jsonb)`, [quoteId]),
+        /cannot change this quotation/,
+      );
+    });
+    const n = await count(
+      db,
+      `select count(*)::int as n from public.quotation_services where quotation_id = $1`,
+      [quoteId],
+    );
+    assertEqual(n, 2, 'the owner selection survived');
+  });
+
+  await check(
+    'a service outside the snapshot is rejected and the old selection is kept',
+    async () => {
+      const ghost = await one<{ id: string }>(
+        db,
+        `select id from public.services where code = 'ghost_tour'`,
+      );
+
+      await asUser(db, ids.agentAuth, async () => {
+        await assertRejects(
+          () =>
+            db.query(`select public.set_quotation_services($1, $2::jsonb)`, [
+              quoteId,
+              JSON.stringify([{ serviceId: ghost.id, dayNumber: 2, sortOrder: 1 }]),
+            ]),
+          /not available when the quotation was created/,
+        );
+      });
+
+      const rows = await db.query<{ service_id: string }>(
+        `select service_id from public.quotation_services where quotation_id = $1`,
+        [quoteId],
+      );
+      assertEqual(rows.rows.length, 2, 'services after the rejected call');
+    },
+  );
+
   await db.close();
   process.exitCode = summary();
 }

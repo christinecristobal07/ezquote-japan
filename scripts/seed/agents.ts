@@ -2,24 +2,11 @@ import type { Workbook } from 'exceljs';
 import { at, fail, hyperlink, sheet, text } from './workbook.ts';
 import { uuid5 } from './sql.ts';
 import type { DataIssue, SeedAgent } from './types.ts';
-
-/** Strict enough to reject "lush,gladex@gmail.com" and "x.gladex.@gmail.com". */
-const EMAIL_PATTERN = /^[a-z0-9]+(?:[._%+-][a-z0-9]+)*@[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z]{2,}$/;
-
-/**
- * The `=\d+` is required on purpose. Across the whole sheet the answer id is
- * uniform (VeryDissatisfied=9712, Satisfied=9713, 75 of each) and exactly one
- * link is truncated to a bare `?surveyAnswerId` — JUSTINE's Bad link. Without
- * the id the survey records nothing, so it is rejected and reported in the fix
- * list rather than stored or silently repaired. This is why the expected count
- * is 13 invalid bad links, not 12.
- */
-const SURVEY_PATTERN =
-  /\/org\d+\/submitsurvey\/agent\d+\/(Satisfied|VeryDissatisfied)\?surveyAnswerId=\d+/;
-
-const SHORTENERS = /^(?:bit\.ly|surl\.li)$/i;
-
-type Rating = 'bad' | 'great';
+import {
+  checkSurveyLink,
+  emailMatchesName,
+  validateEmail,
+} from '../../src/domain/agents/validation.ts';
 
 interface RawRow {
   readonly row: number;
@@ -34,93 +21,12 @@ function cleanName(raw: string): string {
   return raw.replace(/\s+/g, ' ').trim();
 }
 
-function readEmail(
-  raw: string,
-  link: string | null,
-): { email: string | null; note: string | null } {
-  const source = raw.trim() === '' ? (link ?? '') : raw;
-  const candidate = source
-    .replace(/\s+/g, '')
-    .replace(/^mailto:/i, '')
-    .toLowerCase();
-  if (candidate === '') return { email: null, note: null };
-  if (!EMAIL_PATTERN.test(candidate)) {
-    return {
-      email: null,
-      note: `Email "${candidate}" is not a valid address; imported without it.`,
-    };
-  }
-  return { email: candidate, note: null };
-}
-
 /** First https URL in the cell, with trailing punctuation removed. */
 function firstUrl(raw: string, link: string | null): string | null {
   const match = /https:\/\/[^\s"'<>]+/i.exec(raw);
   const url = match?.[0] ?? (link !== null && /^https:/i.test(link) ? link : null);
   if (url === null) return null;
   return url.replace(/[.,;:!?)\]]+$/, '');
-}
-
-type LinkVerdict =
-  | { readonly kind: 'ok'; readonly url: string }
-  | { readonly kind: 'placeholder' }
-  | { readonly kind: 'invalid'; readonly reason: string };
-
-function classify(url: string | null, rating: Rating): LinkVerdict {
-  if (url === null) return { kind: 'invalid', reason: 'no link in the cell' };
-  if (/\/setup\/signature/i.test(url)) return { kind: 'placeholder' };
-
-  let host: string;
-  let path: string;
-  try {
-    const parsed = new URL(url);
-    host = parsed.hostname;
-    path = parsed.pathname;
-  } catch {
-    return { kind: 'invalid', reason: `"${url}" is not a usable URL` };
-  }
-
-  if (SHORTENERS.test(host)) {
-    const slug = path.split('/').filter(Boolean).pop() ?? '';
-    const saysBad = /bad|dissatisf/i.test(slug);
-    const saysGood = /good|great|okay|satisf/i.test(slug);
-    if (rating === 'great' && saysBad && !saysGood) {
-      return { kind: 'invalid', reason: `short link "${slug}" looks like a Bad link` };
-    }
-    if (rating === 'bad' && saysGood && !saysBad) {
-      return { kind: 'invalid', reason: `short link "${slug}" looks like a Great link` };
-    }
-    return { kind: 'ok', url };
-  }
-
-  if (/ratemyservice\.io$/i.test(host)) {
-    const match = SURVEY_PATTERN.exec(url);
-    if (!match) return { kind: 'invalid', reason: `"${url}" is not a complete survey link` };
-    const wanted = rating === 'bad' ? 'VeryDissatisfied' : 'Satisfied';
-    if (match[1] !== wanted) {
-      return { kind: 'invalid', reason: `survey link is ${match[1] ?? '?'}, expected ${wanted}` };
-    }
-    return { kind: 'ok', url };
-  }
-
-  return { kind: 'invalid', reason: `unrecognised link host "${host}"` };
-}
-
-/**
- * Decides whether a name owns an email. A name part of 3+ letters counts when
- * its first 4 letters appear in the local part; short names such as "JM" are
- * matched whole, so "JM" still claims jm.bustamante@…
- */
-function nameMatchesEmail(name: string, email: string): boolean {
-  const local = email.split('@')[0]?.toLowerCase() ?? '';
-  const parts = name
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter((part) => part.length >= 2);
-
-  return parts.some((part) =>
-    part.length >= 3 ? local.includes(part.slice(0, 4)) : local.includes(part),
-  );
 }
 
 export interface AgentsResult {
@@ -141,7 +47,8 @@ export function readAgents(wb: Workbook): AgentsResult {
     if (name === '') continue;
 
     const emailCell = at(ws, `B${row}`);
-    const { email, note } = readEmail(text(emailCell), hyperlink(emailCell));
+    const rawEmail = text(emailCell).trim() === '' ? (hyperlink(emailCell) ?? '') : text(emailCell);
+    const { email, note } = validateEmail(rawEmail);
     const badCell = at(ws, `C${row}`);
     const greatCell = at(ws, `D${row}`);
 
@@ -184,7 +91,7 @@ export function readAgents(wb: Workbook): AgentsResult {
       continue;
     }
 
-    const matching = bucket.filter((r) => nameMatchesEmail(r.name, email));
+    const matching = bucket.filter((r) => emailMatchesName(r.name, email));
     const winner = matching.length === 1 ? matching[0] : undefined;
 
     for (const r of bucket) {
@@ -230,8 +137,8 @@ export function readAgents(wb: Workbook): AgentsResult {
     const badRaw = group.find((r) => r.badUrl !== null)?.badUrl ?? null;
     const greatRaw = group.find((r) => r.greatUrl !== null)?.greatUrl ?? null;
 
-    const bad = classify(badRaw, 'bad');
-    const great = classify(greatRaw, 'great');
+    const bad = checkSurveyLink(badRaw, 'bad');
+    const great = checkSurveyLink(greatRaw, 'great');
 
     let badUrl: string | null = null;
     let greatUrl: string | null = null;

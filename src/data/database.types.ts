@@ -406,6 +406,8 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          invited_at: string | null
+          invited_by: string | null
           is_active: boolean
           role: Database["public"]["Enums"]["app_role"]
           supervisor_id: string | null
@@ -418,6 +420,8 @@ export type Database = {
           email?: string | null
           full_name: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           is_active?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           supervisor_id?: string | null
@@ -430,6 +434,8 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           is_active?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           supervisor_id?: string | null
@@ -437,6 +443,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_supervisor_id_fkey"
             columns: ["supervisor_id"]
@@ -1024,6 +1037,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      agent_login_status: {
+        Args: never
+        Returns: {
+          email_confirmed_at: string
+          invited_at: string
+          last_sign_in_at: string
+          profile_id: string
+        }[]
+      }
       create_rate_draft: {
         Args: { p_from_version_id?: string; p_service_id: string }
         Returns: string
@@ -1042,6 +1064,10 @@ export type Database = {
           p_tiers?: Json
           p_version_id: string
         }
+        Returns: undefined
+      }
+      set_quotation_services: {
+        Args: { p_items?: Json; p_quotation_id: string }
         Returns: undefined
       }
     }

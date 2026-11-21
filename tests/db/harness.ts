@@ -14,6 +14,8 @@ const MIGRATIONS = [
   '20261120110000_grant_api_roles.sql',
   '20261120120000_rate_draft_functions.sql',
   '20261121100000_content_windows_and_reorder.sql',
+  '20261121110000_agent_invites.sql',
+  '20261121120000_set_quotation_services.sql',
 ];
 
 /**
@@ -30,6 +32,8 @@ create schema if not exists auth;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),
   email text unique,
+  email_confirmed_at timestamptz,
+  last_sign_in_at timestamptz,
   raw_user_meta_data jsonb not null default '{}'::jsonb
 );
 create function auth.uid() returns uuid language sql stable as $fn$

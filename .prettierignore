@@ -4,3 +4,4 @@ node_modules
 package-lock.json
 src/data/database.types.ts
 supabase/.temp
+supabase/functions

@@ -19,8 +19,9 @@ import { HotelsPage } from '@/features/content/HotelsPage';
 import { PackageTextPage } from '@/features/content/PackageTextPage';
 import { ReferencePage } from '@/features/content/ReferencePage';
 import { SettingsPage } from '@/features/content/SettingsPage';
+import { AgentsPage } from '@/features/agents/AgentsPage';
+import { MyProfilePage } from '@/features/agents/MyProfilePage';
 import {
-  AgentsAdminPage,
   AuditPage,
   NewQuotationPage,
   NotFoundPage,
@@ -110,10 +111,11 @@ const protectedChildren: RouteObject[] = [
     path: 'admin/agents',
     element: (
       <Guarded permission="agents.manage">
-        <AgentsAdminPage />
+        <AgentsPage />
       </Guarded>
     ),
   },
+  { path: 'me', element: <MyProfilePage /> },
   {
     path: 'audit',
     element: (

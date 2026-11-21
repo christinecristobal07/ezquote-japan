@@ -17,3 +17,9 @@ export {
   type HotelForOutput,
   type HotelGroup,
 } from './hotelGroups.ts';
+
+export {
+  formatClosingBlock,
+  RATE_MY_SERVICE_HEADING,
+  type ClosingBlockInput,
+} from './closingBlock.ts';
