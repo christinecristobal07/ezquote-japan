@@ -375,15 +375,28 @@ export function OutputPage() {
             }
           />
           <CardBody>
+            {/* A saved version that no longer matches the quotation is worse
+                than no version: it looks finished, it is what the agent reads,
+                and it is wrong. Copying is already blocked, so show the current
+                text instead and say why. */}
+            {outOfDate && (
+              <Alert tone="warning" title="The saved version is out of date" className="mb-3">
+                The quotation changed after this version was generated, so the saved text below
+                has been replaced with the current one. Press{' '}
+                <strong>Regenerate quotation</strong> to save it and enable copying.
+              </Alert>
+            )}
+
             <div
               data-testid="output-preview"
               className="rounded-md bg-slate-50 p-4 text-sm whitespace-pre-wrap"
             >
-              {latest?.text ?? renderQuotation(model, 'full')}
+              {latest === null || outOfDate ? renderQuotation(model, 'full') : latest.text}
             </div>
-            {latest === null && (
+            {(latest === null || outOfDate) && (
               <p className="mt-2 text-xs text-slate-500">
-                This is a live preview. Generate to save a version you can copy.
+                This is a live preview.{' '}
+                {latest === null ? 'Generate' : 'Regenerate'} to save a version you can copy.
               </p>
             )}
           </CardBody>

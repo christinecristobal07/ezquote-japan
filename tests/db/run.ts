@@ -1745,6 +1745,158 @@ async function main(): Promise<void> {
     );
   });
 
+  // ---------------------------------------------------------------------------
+  section('Hotel cost per night');
+
+  let nightlyQuoteId = '';
+
+  await check('a hotel entry can record the nightly rate it was built from', async () => {
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ id: string }>(
+          db,
+          `insert into public.quotations (reference_no, agent_id, hotel_category)
+           values ('', $1, 3) returning id`,
+          [ids.agentProfile],
+        );
+        nightlyQuoteId = row.id;
+
+        await db.query(
+          `insert into public.quotation_adjustments
+             (quotation_id, pax_category, kind, amount, currency, reason,
+              amount_per_night, nights)
+           values ($1, 'twin', 'hotel', 7000, 'PHP', 'Sakura Inn, 2 nights', 3500, 2)`,
+          [nightlyQuoteId],
+        );
+      },
+      { commit: true },
+    );
+
+    const row = await one<{ amount: string; amount_per_night: string; nights: number }>(
+      db,
+      `select amount::text, amount_per_night::text, nights
+       from public.quotation_adjustments where quotation_id = $1`,
+      [nightlyQuoteId],
+    );
+    assertEqual(Number(row.amount), 7000, 'the stay total is still the amount');
+    assertEqual(Number(row.amount_per_night), 3500, 'the nightly rate is kept');
+    assertEqual(row.nights, 2, 'and the nights it was multiplied by');
+  });
+
+  await check('a flat stay total is still allowed', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await db.query(
+        `insert into public.quotation_adjustments
+           (quotation_id, pax_category, kind, amount, currency, reason)
+         values ($1, 'quad', 'hotel', 20000, 'PHP', 'Supplier quoted one figure')`,
+        [nightlyQuoteId],
+      );
+    });
+  });
+
+  await check('a nightly rate without a night count is refused', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, currency, reason, amount_per_night)
+             values ($1, 'triple', 'hotel', 7000, 'PHP', 'No nights', 3500)`,
+            [nightlyQuoteId],
+          ),
+        /per_night_pair/,
+      );
+    });
+  });
+
+  await check('a night count without a nightly rate is refused', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, currency, reason, nights)
+             values ($1, 'triple', 'hotel', 7000, 'PHP', 'No rate', 2)`,
+            [nightlyQuoteId],
+          ),
+        /per_night_pair/,
+      );
+    });
+  });
+
+  await check('only a hotel entry may be priced per night', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, currency, reason,
+                amount_per_night, nights)
+             values ($1, 'twin', 'surcharge', 1000, 'PHP', 'Not a hotel', 500, 2)`,
+            [nightlyQuoteId],
+          ),
+        /per_night_hotel_only/,
+      );
+    });
+  });
+
+  await check('nights must be a real stay length', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, currency, reason,
+                amount_per_night, nights)
+             values ($1, 'twin', 'hotel', 0, 'PHP', 'Zero nights', 3500, 0)`,
+            [nightlyQuoteId],
+          ),
+        /nights_check|violates check constraint/,
+      );
+    });
+  });
+
+  await check('a reversal must negate the nightly rate too', async () => {
+    const original = await one<{ id: string }>(
+      db,
+      `select id from public.quotation_adjustments
+       where quotation_id = $1 and amount_per_night is not null limit 1`,
+      [nightlyQuoteId],
+    );
+
+    await asUser(db, ids.agentAuth, async () => {
+      // Right stay total, wrong nightly rate: still refused.
+      await assertRejects(
+        () =>
+          db.query(
+            `insert into public.quotation_adjustments
+               (quotation_id, pax_category, kind, amount, currency, reason,
+                amount_per_night, nights, reverses_id)
+             values ($1, 'twin', 'hotel', -7000, 'PHP', 'Wrong nightly', -9999, 2, $2)`,
+            [nightlyQuoteId, original.id],
+          ),
+        /must exactly negate/,
+      );
+    });
+
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        await db.query(
+          `insert into public.quotation_adjustments
+             (quotation_id, pax_category, kind, amount, currency, reason,
+              amount_per_night, nights, reverses_id)
+           values ($1, 'twin', 'hotel', -7000, 'PHP', 'Corrected', -3500, 2, $2)`,
+          [nightlyQuoteId, original.id],
+        );
+      },
+      { commit: true },
+    );
+  });
+
   await db.close();
   process.exitCode = summary();
 }
