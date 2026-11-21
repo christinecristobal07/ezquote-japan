@@ -23,11 +23,13 @@ import {
   calculateQuotation,
   cityNames,
   defaultPackageTitle,
+  effectiveAmount,
   filterToCities,
   inCityScope,
   outOfCityScope,
   quotationValidity,
   resolveDuration,
+  staleStayTotals,
   validityWarning,
   ledgerView,
   toEngineInput,
@@ -200,7 +202,40 @@ export function QuotationBuilderPage() {
     );
   }
 
+  const itineraryServices: ItineraryService[] = selected.map((row) => {
+    const snap = snapshot.serviceById.get(row.serviceId);
+    const meta = serviceMeta.data?.find((entry) => entry.id === row.serviceId);
+    return {
+      serviceId: row.serviceId,
+      name: snap?.name ?? row.serviceId,
+      consumesDay: snap?.consumesDay ?? false,
+      addsNight: snap?.addsNight ?? false,
+      dayNumber: row.dayNumber,
+      itineraryTitle: meta?.itineraryTitle ?? null,
+      itineraryText: meta?.itineraryText ?? null,
+    };
+  });
+
+  const resolved = resolveDuration(
+    header.durationMode === 'derived'
+      ? { mode: 'derived', services: itineraryServices }
+      : {
+          mode: 'agent_selected',
+          agentDays: header.durationDays,
+          services: itineraryServices,
+        },
+  );
+
   const ledger = ledgerView(adjustments.data ?? [], snapshot);
+  /** The trip's nights, which a per-night hotel entry is multiplied by. */
+  const nights = Math.max(1, resolved.days - 1);
+  /**
+   * Hotel costs typed as one figure for the whole stay cannot follow a change
+   * of length. Flagged, never re-multiplied: guessing a nightly rate out of a
+   * number the agent entered as a finished total would change money they may
+   * already have quoted.
+   */
+  const staleHotelEntries = staleStayTotals(adjustments.data ?? [], nights);
   const paxTotal = header.paxAdults + header.paxChildren;
   const selectedIds = new Set(selected.map((row) => row.serviceId));
 
@@ -230,7 +265,9 @@ export function QuotationBuilderPage() {
       .map((row) => ({
         paxCategory: row.paxCategory,
         kind: row.kind,
-        amount: row.amount,
+        // A hotel entry that recorded its nightly rate re-prices with the
+        // trip, the way the Excel's =rate*NUM_OF_NYTS does.
+        amount: effectiveAmount(row, nights),
         currency: row.currency,
       })),
   );
@@ -271,30 +308,6 @@ export function QuotationBuilderPage() {
     })
     // Out of scope but already selected stays visible, so it can be removed.
     .filter((card) => card.inScope || card.selected);
-
-  const itineraryServices: ItineraryService[] = selected.map((row) => {
-    const snap = snapshot.serviceById.get(row.serviceId);
-    const meta = serviceMeta.data?.find((entry) => entry.id === row.serviceId);
-    return {
-      serviceId: row.serviceId,
-      name: snap?.name ?? row.serviceId,
-      consumesDay: snap?.consumesDay ?? false,
-      addsNight: snap?.addsNight ?? false,
-      dayNumber: row.dayNumber,
-      itineraryTitle: meta?.itineraryTitle ?? null,
-      itineraryText: meta?.itineraryText ?? null,
-    };
-  });
-
-  const resolved = resolveDuration(
-    header.durationMode === 'derived'
-      ? { mode: 'derived', services: itineraryServices }
-      : {
-          mode: 'agent_selected',
-          agentDays: header.durationDays,
-          services: itineraryServices,
-        },
-  );
 
   const itinerary = buildItinerary({
     durationDays: resolved.days,
@@ -660,6 +673,25 @@ export function QuotationBuilderPage() {
               )}
             </CardBody>
           </Card>
+
+          {staleHotelEntries.length > 0 && (
+            <Alert tone="warning" title="Hotel cost was entered as a stay total">
+              <p>
+                The trip is now {resolved.label}, which is {String(nights)} night
+                {nights === 1 ? '' : 's'}. These entries were typed as one figure for the whole
+                stay, so they have NOT changed with it. Check them, and re-enter as a rate per night
+                if the length moved.
+              </p>
+              <ul className="mt-2 list-disc pl-5">
+                {staleHotelEntries.map((entry) => (
+                  <li key={entry.id}>
+                    {snapshot.categoryByCode.get(entry.paxCategory)?.label ?? entry.paxCategory} —{' '}
+                    {entry.reason}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
 
           <HotelCostCard
             snapshot={snapshot}

@@ -23,6 +23,8 @@ function entry(overrides: Partial<AdjustmentRecord> = {}): AdjustmentRecord {
     reason: 'Quad room, 2 nights',
     createdAt: '2026-11-21T01:00:00Z',
     createdByName: 'Agent One',
+    amountPerNight: null,
+    nights: null,
     reversesId: null,
     ...overrides,
   };

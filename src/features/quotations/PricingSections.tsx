@@ -69,7 +69,7 @@ export function HotelCostCard({
     <Card>
       <CardHeader
         title="Hotel cost"
-        description="Entered as a room cost for the whole stay, per category."
+        description="The room rate from the supplier, per night. It follows the trip length."
         actions={
           readOnly ? undefined : (
             <Button size="sm" onClick={onAdd}>
@@ -171,7 +171,7 @@ export function AdjustmentForm({
   // Mounted fresh per dialog open, so the initial kind needs no syncing effect.
   const [kind, setKind] = useState<AdjustmentKind>(mode === 'hotel' ? 'hotel' : 'surcharge');
   const [currency, setCurrency] = useState<(typeof CURRENCIES)[number]>('PHP');
-  const [perNightMode, setPerNightMode] = useState(false);
+  const [perNightMode, setPerNightMode] = useState(mode === 'hotel');
   const [amount, setAmount] = useState('');
   const [nightlyNights, setNightlyNights] = useState(String(nights));
   const [reason, setReason] = useState('');
@@ -252,8 +252,8 @@ export function AdjustmentForm({
               setPerNightMode(event.target.value === 'night');
             }}
           >
-            <option value="total">Total for the stay</option>
-            <option value="night">Per night × nights</option>
+            <option value="night">Rate per night × nights</option>
+            <option value="total">One total for the whole stay</option>
           </Select>
         </Field>
       )}
@@ -350,13 +350,24 @@ export function AdjustmentForm({
           disabled={!valid}
           onClick={() => {
             onSubmit(
-              chosen.map((code) => ({
-                paxCategory: code as NewAdjustment['paxCategory'],
-                kind,
-                amount: amountFor(code),
-                currency,
-                reason: reason.trim(),
-              })),
+              chosen.map((code) => {
+                const raw = Number(allCategories ? (perCategory[code] ?? '') : amount);
+                // Keeping the nightly rate is what lets the hotel re-price
+                // when the trip gets longer, as the Excel does. Only a hotel
+                // entry may carry it; the database refuses any other kind.
+                const perNight =
+                  perNightMode && kind === 'hotel' && Number.isFinite(raw)
+                    ? { amountPerNight: raw, nights: Number(nightlyNights) }
+                    : {};
+                return {
+                  paxCategory: code as NewAdjustment['paxCategory'],
+                  kind,
+                  amount: amountFor(code),
+                  currency,
+                  reason: reason.trim(),
+                  ...perNight,
+                };
+              }),
             );
           }}
         >

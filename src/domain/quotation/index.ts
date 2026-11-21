@@ -22,7 +22,10 @@ export {
 
 export {
   ledgerView,
+  effectiveAmount,
   emptyCategoryLedger,
+  nightlyExplanation,
+  staleStayTotals,
   hotelPerPersonExplanation,
   nightlyToStayTotal,
   validateAdjustmentInput,

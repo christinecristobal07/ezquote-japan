@@ -18,6 +18,7 @@ import {
   buildItinerary,
   buildQuotationModel,
   defaultPackageTitle,
+  effectiveAmount,
   ledgerView,
   outputFingerprint,
   quotationValidity,
@@ -187,7 +188,9 @@ export function OutputPage() {
         liveAdjustments.map((row) => ({
           paxCategory: row.paxCategory,
           kind: row.kind,
-          amount: row.amount,
+          // A hotel entry that recorded its nightly rate re-prices with the
+          // trip, the way the Excel's =rate*NUM_OF_NYTS does.
+          amount: effectiveAmount(row, Math.max(1, resolved.days - 1)),
           currency: row.currency,
         })),
       ),

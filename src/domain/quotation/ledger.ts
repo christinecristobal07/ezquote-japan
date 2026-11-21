@@ -23,6 +23,14 @@ export interface AdjustmentRecord {
   readonly createdByName: string | null;
   /** Set when this row reverses another. */
   readonly reversesId: string | null;
+  /**
+   * For a hotel entry priced per night: the nightly rate it was built from,
+   * and the nights it was multiplied by. Null for a flat stay total, which a
+   * supplier quoting one figure for the whole stay should not have to be
+   * divided back out of.
+   */
+  readonly amountPerNight: number | null;
+  readonly nights: number | null;
 }
 
 export interface LedgerEntry extends AdjustmentRecord {
@@ -154,6 +162,48 @@ export function nightlyToStayTotal(perNight: number, nights: number): number {
   if (!Number.isFinite(perNight) || !Number.isFinite(nights)) return 0;
   if (nights <= 0) return 0;
   return Math.round(perNight * nights * 100) / 100;
+}
+
+/**
+ * What a hotel entry is worth for the trip as it stands now.
+ *
+ * The Excel asks for a rate per night and multiplies by the nights in the
+ * DURATION cell, so lengthening the trip re-prices the hotel by itself. An
+ * entry that recorded its nightly rate does the same here. One entered as a
+ * flat stay total keeps the figure it was given: re-multiplying a number the
+ * agent typed as a finished total would invent money nobody quoted.
+ */
+export function effectiveAmount(entry: AdjustmentRecord, currentNights: number): number {
+  if (entry.amountPerNight === null || entry.nights === null) return entry.amount;
+  if (!Number.isFinite(currentNights) || currentNights <= 0) return entry.amount;
+  return nightlyToStayTotal(entry.amountPerNight, currentNights);
+}
+
+/**
+ * A hotel entry whose nights no longer match the trip, and which cannot follow
+ * it because it was entered as a stay total.
+ *
+ * These are flagged rather than re-multiplied. The agent typed one number for
+ * a stay of a particular length; guessing a nightly rate out of it and scaling
+ * that would change a figure they may already have quoted.
+ */
+export function staleStayTotals(
+  entries: readonly AdjustmentRecord[],
+  currentNights: number,
+): readonly AdjustmentRecord[] {
+  return entries.filter(
+    (entry) =>
+      entry.kind === 'hotel' &&
+      entry.reversesId === null &&
+      entry.amountPerNight === null &&
+      entry.amount !== 0 &&
+      currentNights > 0,
+  );
+}
+
+/** "PHP 3,500 x 2 nights = PHP 7,000", for the hotel cost card. */
+export function nightlyExplanation(perNight: Centavos, nights: number, total: Centavos): string {
+  return `${peso(perNight)} × ${String(nights)} night${nights === 1 ? '' : 's'} = ${peso(total)}`;
 }
 
 export const MAX_ADJUSTMENT_AMOUNT = 10_000_000;
