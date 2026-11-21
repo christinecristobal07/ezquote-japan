@@ -17,6 +17,7 @@ import {
   checkSurveyLink,
   computeDataIssues,
   formatClosingBlock,
+  formatGreeting,
   type DataIssue,
   type LinkOwner,
 } from '@/domain';
@@ -251,11 +252,16 @@ export function AgentEditor({
           />
           <CardBody>
             <pre className="rounded-md bg-slate-50 p-3 text-sm whitespace-pre-wrap">
-              {formatClosingBlock({
-                agentName: values.fullName || agent.fullName,
-                badUrl: issues.rejected.bad ? null : values.badUrl || null,
-                greatUrl: issues.rejected.great ? null : values.greatUrl || null,
-              })}
+              {[
+                formatGreeting(values.fullName || agent.fullName),
+                formatClosingBlock({
+                  agentName: values.fullName || agent.fullName,
+                  badUrl: issues.rejected.bad ? null : values.badUrl || null,
+                  greatUrl: issues.rejected.great ? null : values.greatUrl || null,
+                }),
+              ]
+                .filter((part): part is string => part !== null)
+                .join('\n\n')}
             </pre>
             {(issues.rejected.bad || issues.rejected.great) && (
               <p className="mt-2 text-xs text-slate-600">

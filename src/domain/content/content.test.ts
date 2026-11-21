@@ -77,7 +77,6 @@ describe('formatContentLine', () => {
   it.each([
     ['inclusion', '✅ '],
     ['exclusion', '👉 '],
-    ['requirement', '👉 '],
     ['remark', '- '],
     ['note', 'Note: '],
   ] as const)('prefixes %s with %j', (type, prefix) => {
@@ -86,11 +85,14 @@ describe('formatContentLine', () => {
   });
 
   it.each([
+    // Requirements carry no prefix: the "JAPAN REQUIREMENTS" header has the 👉.
+    'requirement',
     'announcement',
     'availability_reminder',
     'booking_disclaimer',
     'personal_transactions',
   ] as const)('leaves %s unprefixed', (type) => {
+    expect(prefixFor(type)).toBe('');
     expect(formatContentLine(type, 'Body').text).toBe('Body');
   });
 

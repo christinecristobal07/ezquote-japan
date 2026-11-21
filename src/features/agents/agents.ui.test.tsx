@@ -181,15 +181,15 @@ describe('AgentEditor link validation', () => {
     renderEditor({ subject: geneuele, allAgents: [amalia, geneuele] });
 
     const preview = screen.getByText(/Hi my name is Geneuele/);
-    expect(preview.textContent).toContain('Great ');
-    expect(preview.textContent).not.toContain('Bad ');
+    expect(preview.textContent).toContain('GREAT ');
+    expect(preview.textContent).not.toContain('BAD ');
   });
 
   it('shows the closing block with both links when they are clean', () => {
     renderEditor({});
     const preview = screen.getByText(/Hi my name is Aira/);
-    expect(preview.textContent).toContain('RATE MY SERVICE');
-    expect(preview.textContent).toContain(`Bad ${SURVEY_BAD}`);
+    expect(preview.textContent).toContain('How would you rate my service?');
+    expect(preview.textContent).toContain(`BAD \u{1F614}\u{1F614}\u{1F614} ${SURVEY_BAD}`);
   });
 
   it('offers Open buttons that cannot leak the opener', () => {

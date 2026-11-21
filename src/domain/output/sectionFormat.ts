@@ -20,7 +20,7 @@ export type ContentType =
 const PREFIXES: Partial<Record<ContentType, string>> = {
   inclusion: '✅ ',
   exclusion: '\u{1F449} ',
-  requirement: '\u{1F449} ',
+  // requirement has no prefix: the "JAPAN REQUIREMENTS" header carries the 👉.
   remark: '- ',
   note: 'Note: ',
 };

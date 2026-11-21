@@ -23,6 +23,7 @@ import { AgentsPage } from '@/features/agents/AgentsPage';
 import { MyProfilePage } from '@/features/agents/MyProfilePage';
 import { NewQuotationPage } from '@/features/quotations/NewQuotationPage';
 import { QuotationBuilderPage } from '@/features/quotations/QuotationBuilderPage';
+import { OutputPage } from '@/features/quotations/OutputPage';
 import {
   AuditPage,
   NotFoundPage,
@@ -57,6 +58,14 @@ const protectedChildren: RouteObject[] = [
     element: (
       <Guarded permission="quotation.viewOwn">
         <QuotationBuilderPage />
+      </Guarded>
+    ),
+  },
+  {
+    path: 'quotations/:id/output',
+    element: (
+      <Guarded permission="quotation.viewOwn">
+        <OutputPage />
       </Guarded>
     ),
   },

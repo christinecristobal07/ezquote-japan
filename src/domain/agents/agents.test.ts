@@ -12,7 +12,7 @@ import {
   validateInviteRequest,
   MAX_INVITES_PER_CALL,
 } from './invite.ts';
-import { formatClosingBlock } from '../output/closingBlock.ts';
+import { formatClosingBlock, formatGreeting } from '../output/closingBlock.ts';
 
 const SURVEY_BAD =
   'https://app.ratemyservice.io/org303765/submitsurvey/agent12997/VeryDissatisfied?surveyAnswerId=9712';
@@ -254,24 +254,30 @@ describe('summariseInvites', () => {
 });
 
 // -----------------------------------------------------------------------------
+describe('formatGreeting', () => {
+  it('opens the quotation in the agent’s name', () => {
+    expect(formatGreeting('Aira')).toBe(
+      'Hi my name is Aira, I am pleased to offer you the below quotation:',
+    );
+  });
+});
+
 describe('formatClosingBlock', () => {
   it('renders the BRD 9.1 shape with both links', () => {
     expect(
       formatClosingBlock({ agentName: 'Aira', badUrl: SURVEY_BAD, greatUrl: SURVEY_GREAT }),
     ).toBe(
-      `Hi my name is Aira, thank you for letting me assist you!\n\nRATE MY SERVICE\nBad ${SURVEY_BAD}\nGreat ${SURVEY_GREAT}`,
+      `How would you rate my service?\nBAD \u{1F614}\u{1F614}\u{1F614} ${SURVEY_BAD}\nGREAT \u{1F929}\u{1F929}\u{1F929} ${SURVEY_GREAT}`,
     );
   });
 
   it('leaves out a link that is missing', () => {
     const text = formatClosingBlock({ agentName: 'Aira', badUrl: null, greatUrl: SURVEY_GREAT });
-    expect(text).toContain('Great ');
-    expect(text).not.toContain('Bad ');
+    expect(text).toContain('GREAT ');
+    expect(text).not.toContain('BAD ');
   });
 
-  it('drops the heading entirely when there are no links', () => {
-    expect(formatClosingBlock({ agentName: 'Aira', badUrl: null, greatUrl: null })).toBe(
-      'Hi my name is Aira, thank you for letting me assist you!',
-    );
+  it('returns null when there is nothing to rate, so the block is omitted', () => {
+    expect(formatClosingBlock({ agentName: 'Aira', badUrl: null, greatUrl: null })).toBeNull();
   });
 });

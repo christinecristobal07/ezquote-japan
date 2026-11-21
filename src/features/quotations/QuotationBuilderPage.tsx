@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import {
   Alert,
   Badge,
@@ -299,6 +299,12 @@ export function QuotationBuilderPage() {
         description={`${header.referenceNo}${header.clientName === null ? '' : ` · ${header.clientName}`}`}
         actions={
           <span className="flex items-center gap-3">
+            <Link
+              to={`/quotations/${id}/output`}
+              className="text-brand-700 text-sm hover:underline"
+            >
+              Quotation text
+            </Link>
             <Badge tone="neutral">{header.status}</Badge>
             <Tooltip label="This quotation keeps these rates even if rates change later.">
               <span className="text-xs text-slate-600">
