@@ -19,10 +19,26 @@ const define = {
   __BUILD_SHA__: JSON.stringify('test'),
 };
 
+/**
+ * Placeholders, so the suite runs on a machine with no .env — a fresh clone,
+ * and CI, which deliberately holds no Supabase credentials.
+ *
+ * src/lib/env.ts validates at module load and throws if the URL is missing, so
+ * four UI test files failed on import alone before this. Nothing here reaches
+ * a network: these only let the module load. A test that did try to call
+ * Supabase would now fail against an obviously fake host rather than quietly
+ * reaching the real project, which is the outcome worth having.
+ */
+const env = {
+  VITE_SUPABASE_URL: 'https://test-placeholder.supabase.co',
+  VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_placeholder',
+};
+
 export default defineConfig({
   resolve: { alias },
   define,
   test: {
+    env,
     coverage: {
       provider: 'v8',
       include: ['src/domain/**'],
@@ -34,6 +50,7 @@ export default defineConfig({
         resolve: { alias },
         define,
         test: {
+          env,
           name: 'domain',
           environment: 'node',
           include: ['src/**/*.test.ts', 'tests/uat/**/*.test.ts'],
@@ -43,6 +60,7 @@ export default defineConfig({
         resolve: { alias },
         define,
         test: {
+          env,
           name: 'ui',
           environment: 'jsdom',
           include: ['src/**/*.test.tsx'],
