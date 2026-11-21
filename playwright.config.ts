@@ -10,6 +10,7 @@ import { BASE_URL, EVIDENCE_DIR, ROOT, uatConfigured } from './e2e/uat-env.ts';
  * before the UAT project exists.
  */
 const configured = uatConfigured();
+const headersBaseUrl = process.env.E2E_HEADERS_BASE_URL;
 
 export default defineConfig({
   testDir: './e2e',
@@ -38,8 +39,18 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // Security headers against a real static server. Opt in with
+      // E2E_HEADERS_BASE_URL; see e2e/csp.spec.ts.
+      name: 'headers',
+      testMatch: /csp\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(headersBaseUrl === undefined ? {} : { baseURL: headersBaseUrl }),
+      },
+    },
+    {
       name: 'desktop',
-      testIgnore: [/global\.setup\.ts/, /mobile\./],
+      testIgnore: [/global\.setup\.ts/, /mobile\./, /csp\.spec\.ts/],
       dependencies: configured ? ['setup'] : [],
       use: {
         ...devices['Desktop Chrome'],

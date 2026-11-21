@@ -43,3 +43,9 @@ scripts/seed/out/
 e2e/.auth/
 e2e/.results/
 e2e/.report/
+
+# Manual database backups (contain agent emails; keep them in the company folder)
+backups/
+
+# Wrangler build artefacts from `npm run preview:headers`
+.wrangler/

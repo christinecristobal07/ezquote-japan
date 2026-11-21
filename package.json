@@ -1,7 +1,7 @@
 {
   "name": "ezquote-japan",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-pilot",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -9,8 +9,10 @@
   "scripts": {
     "dev": "vite",
     "dev:uat": "vite --mode uat --port 5174 --strictPort",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && tsx scripts/generate-headers.ts",
+    "build:uat": "tsc -b && vite build --mode uat && tsx scripts/generate-headers.ts --mode uat",
     "preview": "vite preview",
+    "preview:headers": "npx -y wrangler pages dev dist --port 4173",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

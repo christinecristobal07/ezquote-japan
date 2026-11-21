@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/useAuth';
 import { ROLE_LABELS } from '@/app/roleLabels';
+import { buildInfo } from '@/lib/buildInfo';
 import { cn } from '@/lib/cn';
 import { SidebarNav } from './Sidebar';
 
@@ -208,7 +209,11 @@ export function AppLayout() {
       </div>
 
       <footer className="border-t border-slate-200 bg-white px-4 py-4 text-xs text-slate-500 md:px-8">
-        {FOOTER_TEXT}
+        <p>{FOOTER_TEXT}</p>
+        {/* Quote this when reporting a problem: it names the exact build. */}
+        <p className="mt-1 text-slate-400" title="Build version and commit">
+          {buildInfo.label}
+        </p>
       </footer>
     </div>
   );

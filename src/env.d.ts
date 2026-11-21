@@ -8,3 +8,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Injected by vite.config.ts at build time. See scripts/generate-headers.ts. */
+declare const __APP_VERSION__: string;
+declare const __BUILD_SHA__: string;

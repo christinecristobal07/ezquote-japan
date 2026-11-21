@@ -56,6 +56,14 @@ describe('AppLayout', () => {
     expect(screen.getByText('Dashboard body')).toBeInTheDocument();
   });
 
+  it('stamps the build in the footer, so pilot feedback can name it', () => {
+    renderLayout();
+    // Injected by the Vite/Vitest `define`; the sha is "test" under Vitest.
+    expect(screen.getByTitle('Build version and commit')).toHaveTextContent(
+      /^v\d+\.\d+\.\d+.* · \S+$/,
+    );
+  });
+
   it('marks the active nav item with aria-current', () => {
     renderLayout();
     const dashboard = screen.getAllByRole('link', { name: /Dashboard/ })[0];

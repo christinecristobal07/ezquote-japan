@@ -7,7 +7,17 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'src/data/database.types.ts', 'supabase/functions']),
+  globalIgnores([
+    'dist',
+    'coverage',
+    'src/data/database.types.ts',
+    'supabase/functions',
+    // Wrangler's scratch bundles from `npm run preview:headers`.
+    '.wrangler',
+    // Playwright's own output.
+    'e2e/.report',
+    'e2e/.results',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

@@ -5,3 +5,6 @@ package-lock.json
 src/data/database.types.ts
 supabase/.temp
 supabase/functions
+
+# Wrangler build artefacts from `npm run preview:headers`
+.wrangler/

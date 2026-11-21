@@ -1,0 +1,23 @@
+# Single-page app fallback for Cloudflare Pages.
+#
+# React Router owns the URLs, so a request for /quotations/<id> must be answered
+# with index.html and a 200 — not a 302, which would change the address bar, and
+# not a 404, which is what a static host does by default.
+#
+# Two things worth knowing, both verified against `wrangler pages dev dist`:
+#
+#   1. Pages matches an existing file in dist/ BEFORE it consults this file, so
+#      /assets/*, /favicon.svg and the fonts are still served as themselves with
+#      their own Content-Type and their immutable cache header.
+#
+#   2. Pages already falls back to index.html for an unmatched path when the
+#      project has no 404.html — a deep route returns 200 with this file removed
+#      entirely. So this rule is an explicit belt to the platform's braces.
+#      `wrangler pages dev` prints an "infinite loop detected ... has been
+#      ignored" warning about it, because /index.html itself matches /*. That
+#      warning is expected and harmless: the outcome is the same either way, and
+#      e2e/csp.spec.ts asserts the outcome rather than the mechanism.
+#
+# Do not add a 404.html to this project without re-testing deep links: it would
+# take over from the fallback above.
+/*    /index.html    200

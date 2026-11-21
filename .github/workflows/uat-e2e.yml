@@ -1,0 +1,126 @@
+name: uat-e2e
+
+# Manually triggered only. It signs in, creates quotations and can deactivate a
+# user, so it runs against the UAT Supabase project and nothing else.
+#
+# The secrets live in a GitHub Environment called "uat", which is the only place
+# they are configured. No production Supabase credential belongs in this
+# repository, in any environment, for any reason: e2e/uat-env.ts also compares
+# the project ref it is given against the one in .env and refuses to start if
+# they match.
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Playwright project to run'
+        required: true
+        default: 'desktop'
+        type: choice
+        options:
+          - desktop
+          - mobile
+          - headers
+          - all
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: End-to-end UAT
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: uat
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Written here rather than committed, because it holds test-user
+      # passwords. The file is gitignored; this step recreates it from the
+      # environment secrets for the length of the job.
+      - name: Write .env.uat
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.UAT_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.UAT_SUPABASE_PUBLISHABLE_KEY }}
+          E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
+          E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}
+          E2E_PRODUCT_DEV_EMAIL: ${{ secrets.E2E_PRODUCT_DEV_EMAIL }}
+          E2E_PRODUCT_DEV_PASSWORD: ${{ secrets.E2E_PRODUCT_DEV_PASSWORD }}
+          E2E_SUPERVISOR_EMAIL: ${{ secrets.E2E_SUPERVISOR_EMAIL }}
+          E2E_SUPERVISOR_PASSWORD: ${{ secrets.E2E_SUPERVISOR_PASSWORD }}
+          E2E_AGENT_A_EMAIL: ${{ secrets.E2E_AGENT_A_EMAIL }}
+          E2E_AGENT_A_PASSWORD: ${{ secrets.E2E_AGENT_A_PASSWORD }}
+          E2E_AGENT_B_EMAIL: ${{ secrets.E2E_AGENT_B_EMAIL }}
+          E2E_AGENT_B_PASSWORD: ${{ secrets.E2E_AGENT_B_PASSWORD }}
+          E2E_DEACTIVATED_EMAIL: ${{ secrets.E2E_DEACTIVATED_EMAIL }}
+          E2E_DEACTIVATED_PASSWORD: ${{ secrets.E2E_DEACTIVATED_PASSWORD }}
+        run: |
+          {
+            echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL"
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY"
+            echo "E2E_SUPER_ADMIN_EMAIL=$E2E_SUPER_ADMIN_EMAIL"
+            echo "E2E_SUPER_ADMIN_PASSWORD=$E2E_SUPER_ADMIN_PASSWORD"
+            echo "E2E_PRODUCT_DEV_EMAIL=$E2E_PRODUCT_DEV_EMAIL"
+            echo "E2E_PRODUCT_DEV_PASSWORD=$E2E_PRODUCT_DEV_PASSWORD"
+            echo "E2E_SUPERVISOR_EMAIL=$E2E_SUPERVISOR_EMAIL"
+            echo "E2E_SUPERVISOR_PASSWORD=$E2E_SUPERVISOR_PASSWORD"
+            echo "E2E_AGENT_A_EMAIL=$E2E_AGENT_A_EMAIL"
+            echo "E2E_AGENT_A_PASSWORD=$E2E_AGENT_A_PASSWORD"
+            echo "E2E_AGENT_B_EMAIL=$E2E_AGENT_B_EMAIL"
+            echo "E2E_AGENT_B_PASSWORD=$E2E_AGENT_B_PASSWORD"
+            echo "E2E_DEACTIVATED_EMAIL=$E2E_DEACTIVATED_EMAIL"
+            echo "E2E_DEACTIVATED_PASSWORD=$E2E_DEACTIVATED_PASSWORD"
+          } > .env.uat
+
+      # A last line of defence in the pipeline itself, so a mistyped secret
+      # cannot point this job at the live database.
+      - name: Refuse to run against production
+        run: |
+          uat_ref=$(grep '^VITE_SUPABASE_URL=' .env.uat | sed -E 's#.*://([^.]+)\..*#\1#')
+          if [ -z "$uat_ref" ]; then echo "UAT_SUPABASE_URL is not set"; exit 1; fi
+          echo "UAT project ref: $uat_ref"
+          if [ -f .env ]; then
+            prod_ref=$(grep '^VITE_SUPABASE_URL=' .env | sed -E 's#.*://([^.]+)\..*#\1#')
+            if [ "$uat_ref" = "$prod_ref" ]; then
+              echo "The UAT secrets point at the production project. Refusing."
+              exit 1
+            fi
+          fi
+
+      - name: Run the UAT suite
+        env:
+          CI: 'true'
+        run: |
+          if [ "${{ inputs.project }}" = "all" ]; then
+            npx playwright test
+          else
+            npx playwright test --project=${{ inputs.project }}
+          fi
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/.report
+          retention-days: 14
+
+      - name: Upload the UAT evidence screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-evidence
+          path: docs/uat/evidence
+          retention-days: 30
