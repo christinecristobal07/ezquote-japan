@@ -147,6 +147,42 @@ describe('golden pricing flow', () => {
     );
     expect(screen.getByRole('button', { name: 'Generate quotation' })).toBeEnabled();
   });
+
+  // The button rendered enabled but with no handler attached for a while:
+  // it looked like it worked and did nothing at all. Asserting the click,
+  // not just the enabled state, is what would have caught that.
+  it('calls onGenerate when it is pressed', async () => {
+    const onGenerate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DetailedSummary
+        input={engineInput([record()])}
+        outputCategories={['quad']}
+        snapshot={snapshot}
+        onGenerate={onGenerate}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate quotation' }));
+    expect(onGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onGenerate while something blocks it', async () => {
+    const onGenerate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DetailedSummary
+        input={engineInput([record()])}
+        outputCategories={['quad']}
+        snapshot={snapshot}
+        extraBlocking={['the tours do not fit']}
+        onGenerate={onGenerate}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Generate quotation' });
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(onGenerate).not.toHaveBeenCalled();
+  });
 });
 
 // -----------------------------------------------------------------------------

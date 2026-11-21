@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   Alert,
   Badge,
@@ -101,6 +101,7 @@ function settingText(
 
 export function QuotationBuilderPage() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const { profile } = useAuth();
 
@@ -813,6 +814,11 @@ export function QuotationBuilderPage() {
           outputCategories={header.outputCategories}
           snapshot={snapshot}
           extraBlocking={blockingReasons}
+          // The output page is where a version is reviewed and saved, so this
+          // takes the agent there rather than generating behind their back.
+          onGenerate={() => {
+            void navigate(`/quotations/${id}/output`);
+          }}
         />
       </div>
 
