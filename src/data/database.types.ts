@@ -462,12 +462,14 @@ export type Database = {
       quotation_adjustments: {
         Row: {
           amount: number
+          amount_per_night: number | null
           created_at: string
           created_by: string | null
           created_by_name: string | null
           currency: Database["public"]["Enums"]["currency_code"]
           id: string
           kind: Database["public"]["Enums"]["adjustment_kind"]
+          nights: number | null
           pax_category: Database["public"]["Enums"]["pax_category"]
           quotation_id: string
           reason: string
@@ -475,12 +477,14 @@ export type Database = {
         }
         Insert: {
           amount: number
+          amount_per_night?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
           currency?: Database["public"]["Enums"]["currency_code"]
           id?: string
           kind: Database["public"]["Enums"]["adjustment_kind"]
+          nights?: number | null
           pax_category: Database["public"]["Enums"]["pax_category"]
           quotation_id: string
           reason: string
@@ -488,12 +492,14 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_per_night?: number | null
           created_at?: string
           created_by?: string | null
           created_by_name?: string | null
           currency?: Database["public"]["Enums"]["currency_code"]
           id?: string
           kind?: Database["public"]["Enums"]["adjustment_kind"]
+          nights?: number | null
           pax_category?: Database["public"]["Enums"]["pax_category"]
           quotation_id?: string
           reason?: string
