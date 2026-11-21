@@ -25,7 +25,7 @@ import {
   type QuotationFilters,
   type QuotationSort,
 } from '@/domain';
-import { can } from '@/domain/permissions';
+import { can, isManager } from '@/domain/permissions';
 import { ContentError } from '@/data/repositories/contentRepository';
 import type { DuplicateResult, QuotationListRow } from '@/data/repositories/quotationRepository';
 import { useAuth } from '@/features/auth/useAuth';
@@ -415,10 +415,16 @@ export function QuotationsPage() {
 }
 
 export function TeamQuotationsPage() {
+  const { profile } = useAuth();
+  const everyone = profile !== null && isManager(profile.role);
   return (
     <QuotationHistory
-      title="Team quotations"
-      description="Quotations from the agents you can see."
+      title={everyone ? 'All quotations' : 'Team quotations'}
+      description={
+        everyone
+          ? 'Every quotation in the system, newest first.'
+          : 'Quotations from the agents who report to you.'
+      }
       scope="team"
     />
   );

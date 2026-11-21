@@ -20,20 +20,24 @@ describe('visibleNavItems', () => {
     ]);
   });
 
+  // A manager needs this link as much as a supervisor does: "Quotations" is
+  // pinned to whoever is signed in, so without it a manager has no way to
+  // reach anybody else's work but typing the URL.
   it.each(['super_admin', 'product_development', 'admin'] as const)(
-    'gives %s every item except Team quotations',
+    'gives %s every item, with All quotations rather than Team',
     (role) => {
       const visible = labels(role);
       expect(visible).toEqual([
         'Dashboard',
         'New quotation',
         'Quotations',
+        'All quotations',
         'Rates & FX',
         'Content',
         'Agents',
         'Audit log',
       ]);
-      // Managers already see everything under Quotations.
+      // Named for what they actually get, which is everyone's.
       expect(visible).not.toContain('Team quotations');
     },
   );

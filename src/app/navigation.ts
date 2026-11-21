@@ -19,8 +19,11 @@ export interface NavItem {
   /** Omitted for items everyone signed in may reach. */
   readonly permission?: Permission;
   readonly group: NavGroupName;
-  /** Managers see every quotation under Quotations, so Team is redundant for them. */
-  readonly supervisorOnly?: boolean;
+  /**
+   * A manager sees everyone's, not just one team's, so the same screen is
+   * worth a truer name for them.
+   */
+  readonly managerLabel?: string;
 }
 
 export interface NavGroup {
@@ -46,11 +49,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     label: 'Team quotations',
+    managerLabel: 'All quotations',
     path: '/team/quotations',
     icon: UsersRound,
     permission: 'quotation.viewTeam',
     group: 'Sales',
-    supervisorOnly: true,
   },
   {
     label: 'Rates & FX',
@@ -85,8 +88,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
 const GROUP_ORDER: readonly NavGroupName[] = ['Sales', 'Administration'];
 
 export function visibleNavItems(role: Role): readonly NavItem[] {
-  return NAV_ITEMS.filter((item) => {
-    if (item.supervisorOnly === true && isManager(role)) return false;
+  return NAV_ITEMS.map((item) =>
+    item.managerLabel !== undefined && isManager(role)
+      ? { ...item, label: item.managerLabel }
+      : item,
+  ).filter((item) => {
     if (item.permission === undefined) return true;
     return can(role, item.permission);
   });
