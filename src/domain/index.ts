@@ -62,3 +62,6 @@ export * from './content/index.ts';
 export * from './output/index.ts';
 export * from './agents/index.ts';
 export * from './quotation/index.ts';
+export * from './audit/index.ts';
+
+export * from './history/index.ts';

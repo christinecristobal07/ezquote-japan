@@ -1053,6 +1053,8 @@ export type Database = {
         Args: { p_from_version_id?: string; p_service_id: string }
         Returns: string
       }
+      duplicate_quotation: { Args: { p_quotation_id: string }; Returns: Json }
+      preview_current_snapshot: { Args: never; Returns: Json }
       reorder_content: {
         Args: {
           p_ids: string[]

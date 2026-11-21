@@ -20,32 +20,12 @@ function Placeholder({
   );
 }
 
-export function QuotationsPage() {
-  return (
-    <Placeholder
-      title="Quotations"
-      description="Every quotation you can see, newest first."
-      step={11}
-    />
-  );
-}
-
 export function NewQuotationPage() {
   return (
     <Placeholder
       title="New quotation"
       description="Pick the services, hotels and travellers, then generate the rate."
       step={11}
-    />
-  );
-}
-
-export function TeamQuotationsPage() {
-  return (
-    <Placeholder
-      title="Team quotations"
-      description="Quotations from the agents who report to you."
-      step={12}
     />
   );
 }
@@ -76,16 +56,6 @@ export function AgentsAdminPage() {
       title="Agents"
       description="Agent profiles, roles, supervisors and Rate My Service links."
       step={10}
-    />
-  );
-}
-
-export function AuditPage() {
-  return (
-    <Placeholder
-      title="Audit log"
-      description="Every important change, with who made it and when."
-      step={15}
     />
   );
 }

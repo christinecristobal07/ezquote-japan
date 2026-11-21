@@ -1,6 +1,13 @@
+import { z } from 'zod';
 import { supabase } from '@/data/supabaseClient';
 import type { Database } from '@/data/database.types';
-import { parseSnapshot, type RateSnapshot } from '@/domain';
+import {
+  DEFAULT_QUOTATION_FILTERS,
+  PAGE_SIZE,
+  parseSnapshot,
+  type QuotationFilters,
+  type RateSnapshot,
+} from '@/domain';
 import { ConflictError, ContentError, toContentError } from './contentRepository';
 
 type BookingStatus = Database['public']['Enums']['booking_status'];
@@ -331,4 +338,203 @@ export async function updatePricing(
   const row = data[0];
   if (row === undefined) throw new ConflictError();
   return toHeader(row);
+}
+
+// -----------------------------------------------------------------------------
+// History list
+// -----------------------------------------------------------------------------
+
+export interface QuotationListRow {
+  readonly id: string;
+  readonly referenceNo: string;
+  readonly agentId: string;
+  readonly agentName: string | null;
+  readonly clientName: string | null;
+  readonly packageTitle: string | null;
+  readonly travelDate: string | null;
+  readonly durationDays: number;
+  readonly paxTotal: number;
+  readonly hotelCategory: number | null;
+  readonly status: Database['public']['Enums']['quotation_status'];
+  readonly bookingStatus: BookingStatus;
+  readonly ratesAsOf: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface QuotationPage {
+  readonly rows: readonly QuotationListRow[];
+  /** Total matching rows, so the UI can show "26-50 of 184". */
+  readonly total: number;
+}
+
+const LIST_COLUMNS =
+  'id, reference_no, agent_id, client_name, package_title, travel_date, duration_days, pax_total, hotel_category, status, booking_status, rates_as_of, created_at, updated_at, agent:profiles!quotations_agent_id_fkey ( full_name )';
+
+interface RawListRow {
+  id: string;
+  reference_no: string;
+  agent_id: string;
+  client_name: string | null;
+  package_title: string | null;
+  travel_date: string | null;
+  duration_days: number;
+  pax_total: number;
+  hotel_category: number | null;
+  status: Database['public']['Enums']['quotation_status'];
+  booking_status: BookingStatus;
+  rates_as_of: string;
+  created_at: string;
+  updated_at: string;
+  agent: { full_name: string } | null;
+}
+
+/** Escapes the % and _ wildcards so a search for "100%" is not a wildcard. */
+function likeTerm(search: string): string {
+  return `%${search.replace(/[%_\\]/g, (character) => `\\${character}`)}%`;
+}
+
+/**
+ * One page of quotation history.
+ *
+ * RLS decides which rows exist at all — an agent sees their own, a supervisor
+ * their team's, a manager everything — so this never filters by viewer. The
+ * count and the slice both come from the server: a supervisor with hundreds of
+ * team quotes must not pull them all into the browser to show 25.
+ */
+export async function listQuotations(filters: QuotationFilters): Promise<QuotationPage> {
+  let query = supabase
+    .from('quotations')
+    .select(LIST_COLUMNS, { count: 'exact' })
+    .order(filters.sort, { ascending: filters.direction === 'asc', nullsFirst: false })
+    // A stable tie-break, so paging cannot show the same row twice.
+    .order('id');
+
+  if (filters.search !== '') {
+    const term = likeTerm(filters.search);
+    query = query.or(
+      `reference_no.ilike.${term},client_name.ilike.${term},package_title.ilike.${term}`,
+    );
+  }
+  if (filters.statuses.length > 0) query = query.in('status', [...filters.statuses]);
+  if (filters.agentId !== '') query = query.eq('agent_id', filters.agentId);
+  if (filters.from !== '') query = query.gte('travel_date', filters.from);
+  if (filters.to !== '') query = query.lte('travel_date', filters.to);
+
+  const first = (filters.page - 1) * PAGE_SIZE;
+  const { data, error, count } = await query
+    .range(first, first + PAGE_SIZE - 1)
+    .overrideTypes<RawListRow[], { merge: false }>();
+
+  if (error) throw toContentError(error);
+
+  return {
+    rows: data.map((row) => ({
+      id: row.id,
+      referenceNo: row.reference_no,
+      agentId: row.agent_id,
+      agentName: row.agent?.full_name ?? null,
+      clientName: row.client_name,
+      packageTitle: row.package_title,
+      travelDate: row.travel_date,
+      durationDays: row.duration_days,
+      paxTotal: row.pax_total,
+      hotelCategory: row.hotel_category,
+      status: row.status,
+      bookingStatus: row.booking_status,
+      ratesAsOf: row.rates_as_of,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+    total: count ?? 0,
+  };
+}
+
+/** The newest few, for the dashboard card. */
+export async function listRecentQuotations(limit = 5): Promise<readonly QuotationListRow[]> {
+  const page = await listQuotations({
+    ...DEFAULT_QUOTATION_FILTERS,
+    statuses: ['draft', 'sent'],
+  });
+  return page.rows.slice(0, limit);
+}
+
+/** How many quotations were created in the last `days` days, for managers. */
+export async function countQuotationsSince(days: number): Promise<number> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from('quotations')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', since);
+  if (error) throw toContentError(error);
+  return count ?? 0;
+}
+
+/**
+ * Archive or restore. Archiving is reversible and keeps the row: a quotation is
+ * a record of what was quoted to a client, so nothing here deletes one.
+ */
+export async function setQuotationStatus(
+  id: string,
+  loadedUpdatedAt: string,
+  status: Database['public']['Enums']['quotation_status'],
+): Promise<QuotationHeader> {
+  const { data, error } = await supabase
+    .from('quotations')
+    .update({ status })
+    .eq('id', id)
+    .eq('updated_at', loadedUpdatedAt)
+    .select(HEADER_COLUMNS)
+    .overrideTypes<RawHeader[], { merge: false }>();
+
+  if (error) throw toContentError(error);
+  const row = data[0];
+  if (row === undefined) throw new ConflictError();
+  return toHeader(row);
+}
+
+// -----------------------------------------------------------------------------
+// Requote
+// -----------------------------------------------------------------------------
+
+export interface DuplicateResult {
+  readonly id: string;
+  readonly referenceNo: string;
+  /** Services dropped because they are no longer published or have expired. */
+  readonly skippedServices: readonly string[];
+  readonly skippedAddons: readonly string[];
+}
+
+const duplicateShape = z.object({
+  id: z.string().min(1),
+  referenceNo: z.string().min(1),
+  skippedServices: z.array(z.string()),
+  skippedAddons: z.array(z.string()),
+});
+
+/**
+ * Copies a quotation, priced at today's rates.
+ *
+ * The copy gets a fresh snapshot, which is the point of a requote. Anything no
+ * longer on sale cannot be carried over, so the function reports what it left
+ * behind and the UI tells the agent rather than silently shipping a thinner
+ * quote.
+ */
+export async function duplicateQuotation(id: string): Promise<DuplicateResult> {
+  const { data, error } = await supabase.rpc('duplicate_quotation', { p_quotation_id: id });
+  if (error) throw toContentError(error);
+
+  const parsed = duplicateShape.safeParse(data);
+  if (!parsed.success) throw new ContentError('The copy was made, but could not be read back.');
+  return parsed.data;
+}
+
+/**
+ * A snapshot of the rates in force right now, built by the same SQL that
+ * freezes one into a new quotation. Used only for the comparison panel.
+ */
+export async function previewCurrentSnapshot(): Promise<RateSnapshot> {
+  const { data, error } = await supabase.rpc('preview_current_snapshot');
+  if (error) throw toContentError(error);
+  return parseSnapshot(data);
 }

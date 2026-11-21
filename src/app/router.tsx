@@ -24,12 +24,9 @@ import { MyProfilePage } from '@/features/agents/MyProfilePage';
 import { NewQuotationPage } from '@/features/quotations/NewQuotationPage';
 import { QuotationBuilderPage } from '@/features/quotations/QuotationBuilderPage';
 import { OutputPage } from '@/features/quotations/OutputPage';
-import {
-  AuditPage,
-  NotFoundPage,
-  QuotationsPage,
-  TeamQuotationsPage,
-} from '@/app/pages/placeholders';
+import { AuditPage } from '@/features/audit/AuditPage';
+import { QuotationsPage, TeamQuotationsPage } from '@/features/history/QuotationHistory';
+import { NotFoundPage } from '@/app/pages/placeholders';
 
 function Guarded({ children, permission }: { children: ReactNode; permission: Permission }) {
   return <RequireRole permission={permission}>{children}</RequireRole>;

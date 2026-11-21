@@ -31,7 +31,7 @@ import {
 import type { Database } from '@/data/database.types';
 
 type PaxCategory = Database['public']['Enums']['pax_category'];
-import { isManager } from '@/domain/permissions';
+import { can, isManager } from '@/domain/permissions';
 import { ConflictError, ContentError } from '@/data/repositories/contentRepository';
 import type { NewAdjustment } from '@/data/repositories/adjustmentRepository';
 import type { ServiceSelection } from '@/data/repositories/quotationRepository';
@@ -66,6 +66,7 @@ import {
   HotelCostCard,
   LedgerTable,
 } from './PricingSections';
+import { SnapshotPanel } from './SnapshotPanel';
 import { saveStateLabel, useAutosave } from './useAutosave';
 
 const ALL_CATEGORIES: readonly PaxCategory[] = [
@@ -662,6 +663,13 @@ export function QuotationBuilderPage() {
               </fieldset>
             </CardBody>
           </Card>
+
+          <SnapshotPanel
+            quotationId={id}
+            snapshot={snapshot}
+            ratesAsOf={header.ratesAsOf}
+            canRequote={can(profile.role, 'quotation.create')}
+          />
         </div>
 
         <DetailedSummary

@@ -39,3 +39,12 @@ export {
   type LedgerEntry,
   type LedgerView,
 } from './ledger.ts';
+
+export {
+  diffSnapshots,
+  type FxChange,
+  type MarkupChange,
+  type ServiceChange,
+  type SnapshotDiff,
+  type TierChange,
+} from './snapshotDiff.ts';

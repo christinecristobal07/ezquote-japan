@@ -4,6 +4,7 @@ import { visibleNavItems } from '@/app/navigation';
 import { ROLE_LABELS } from '@/app/roleLabels';
 import { useAuth } from '@/features/auth/useAuth';
 import { firstName, greetingFor } from '@/lib/greeting';
+import { RecentQuotationsCard } from './RecentQuotationsCard';
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -18,6 +19,10 @@ export function DashboardPage() {
         description="Build a quotation, or pick up where you left off."
         actions={<Badge tone="info">{ROLE_LABELS[profile.role]}</Badge>}
       />
+      <div className="mb-6">
+        <RecentQuotationsCard role={profile.role} />
+      </div>
+
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {actions.map((item) => (
           <li key={item.path}>

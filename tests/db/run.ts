@@ -1255,6 +1255,141 @@ async function main(): Promise<void> {
     assert(audited > 0, 'adjustments should be audited');
   });
 
+  // ---------------------------------------------------------------------------
+  section('Requote with current rates');
+
+  await check('preview_current_snapshot needs an active account', async () => {
+    await asUser(db, ids.inactiveAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.preview_current_snapshot()`),
+        /Sign in to preview current rates/,
+      );
+    });
+    await asUser(db, ids.agentAuth, async () => {
+      const row = await one<{ jpy: string }>(
+        db,
+        `select (public.preview_current_snapshot() -> 'fx' ->> 'JPY') as jpy`,
+      );
+      // FX moved to 0.42 earlier in this run.
+      assertEqual(Number(row.jpy), 0.42, 'current FX in the preview');
+    });
+  });
+
+  let copyId = '';
+  await check('an agent requotes their own quote at current rates', async () => {
+    const before = await one<{ jpy: string }>(
+      db,
+      `select (snapshot -> 'fx' ->> 'JPY') as jpy from public.quotations where id = $1`,
+      [quoteId],
+    );
+    assertEqual(Number(before.jpy), 0.5, 'the original keeps its own FX');
+
+    await asUser(
+      db,
+      ids.agentAuth,
+      async () => {
+        const row = await one<{ result: { id: string; referenceNo: string } }>(
+          db,
+          `select public.duplicate_quotation($1) as result`,
+          [quoteId],
+        );
+        copyId = row.result.id;
+        assert(/^JPN-\d{4}-\d{6}$/.test(row.result.referenceNo), 'the copy gets its own reference');
+      },
+      { commit: true },
+    );
+
+    const after = await one<{ jpy: string; agent_id: string }>(
+      db,
+      `select (snapshot -> 'fx' ->> 'JPY') as jpy, agent_id from public.quotations where id = $1`,
+      [copyId],
+    );
+    assertEqual(Number(after.jpy), 0.42, 'the copy uses the current FX');
+    assertEqual(after.agent_id, ids.agentProfile, 'the copy belongs to the caller');
+  });
+
+  await check('the original is left untouched', async () => {
+    const row = await one<{ jpy: string; n: number }>(
+      db,
+      `select (q.snapshot -> 'fx' ->> 'JPY') as jpy,
+              (select count(*)::int from public.quotation_services s where s.quotation_id = q.id) as n
+       from public.quotations q where q.id = $1`,
+      [quoteId],
+    );
+    assertEqual(Number(row.jpy), 0.5, 'original FX');
+    assertEqual(row.n, 2, 'original services');
+  });
+
+  await check(
+    'live Change Rate entries are copied, netted, with a "Copied from" reason',
+    async () => {
+      const rows = await db.query<{ pax_category: string; amount: string; reason: string }>(
+        `select pax_category, amount::text, reason from public.quotation_adjustments
+       where quotation_id = $1 order by pax_category`,
+        [copyId],
+      );
+      assert(rows.rows.length > 0, 'something should have been copied');
+      for (const row of rows.rows) {
+        assert(row.reason.startsWith('Copied from JPN-'), `reason was "${row.reason}"`);
+      }
+      // The twin hotel entry was reversed earlier, so it must not appear.
+      assert(
+        !rows.rows.some((row) => row.pax_category === 'twin'),
+        'a reversed entry must not be copied',
+      );
+    },
+  );
+
+  await check('a supervisor requoting a team quote owns the copy', async () => {
+    await asUser(db, ids.supervisorAuth, async () => {
+      const row = await one<{ result: { id: string } }>(
+        db,
+        `select public.duplicate_quotation($1) as result`,
+        [quoteId],
+      );
+      const owner = await one<{ agent_id: string }>(
+        db,
+        `select agent_id from public.quotations where id = $1`,
+        [row.result.id],
+      );
+      assertEqual(owner.agent_id, ids.supervisorProfile, 'the copy belongs to the supervisor');
+    });
+  });
+
+  await check('another agent cannot requote a quote they cannot see', async () => {
+    await asUser(db, ids.otherAgentAuth, async () => {
+      await assertRejects(
+        () => db.query(`select public.duplicate_quotation($1)`, [quoteId]),
+        /was not found, or you cannot see it/,
+      );
+    });
+  });
+
+  await check('a service missing from the new snapshot is reported as skipped', async () => {
+    // Retiring the tour's rate drops it out of every snapshot built from now on.
+    await db.query(
+      `update public.service_rate_versions set status = 'inactive'
+       where service_id = $1 and status = 'published'`,
+      [ids.transferService],
+    );
+
+    await asUser(db, ids.agentAuth, async () => {
+      const row = await one<{ result: { id: string; skippedServices: string[] } }>(
+        db,
+        `select public.duplicate_quotation($1) as result`,
+        [quoteId],
+      );
+      assertEqual(row.result.skippedServices, ['Airport Transfer'], 'skipped services');
+
+      const kept = await count(
+        db,
+        `select count(*)::int as n from public.quotation_services where quotation_id = $1`,
+        [row.result.id],
+      );
+      assertEqual(kept, 1, 'only the service still in the snapshot was copied');
+    });
+  });
+
   await db.close();
   process.exitCode = summary();
 }
