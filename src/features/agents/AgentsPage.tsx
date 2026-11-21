@@ -16,7 +16,17 @@ import {
   useToast,
 } from '@/components/ui';
 import { isManager, type Role } from '@/domain/permissions';
-import { summariseInvites, type InviteResult } from '@/domain';
+import {
+  DATA_ISSUES,
+  DATA_ISSUE_CONSEQUENCES,
+  DATA_ISSUE_LABELS,
+  issueFilterLabel,
+  matchesIssueFilter,
+  summariseDataIssues,
+  summariseInvites,
+  type InviteResult,
+  type IssueFilter,
+} from '@/domain';
 import { ROLE_LABELS } from '@/app/roleLabels';
 import { ContentError } from '@/data/repositories/contentRepository';
 import type { AgentProfile } from '@/data/repositories/agentRepository';
@@ -80,7 +90,7 @@ export function AgentsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
-  const [issuesOnly, setIssuesOnly] = useState(false);
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>('all');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [inviteResults, setInviteResults] = useState<readonly InviteResult[] | null>(null);
   const [deactivating, setDeactivating] = useState(false);
@@ -92,13 +102,15 @@ export function AgentsPage() {
     () => new Map((login.data ?? []).map((row) => [row.profileId, row])),
     [login.data],
   );
+  const issues = useMemo(() => summariseDataIssues(agents.data ?? []), [agents.data]);
+
   const nameById = useMemo(
     () => new Map((agents.data ?? []).map((row) => [row.id, row.fullName])),
     [agents.data],
   );
 
   const rows = (agents.data ?? []).filter((agent) => {
-    if (issuesOnly && agent.dataIssues.length === 0) return false;
+    if (!matchesIssueFilter(agent, issueFilter)) return false;
     if (roleFilter !== 'all' && agent.role !== roleFilter) return false;
     if (activeFilter === 'active' && !agent.isActive) return false;
     if (activeFilter === 'inactive' && agent.isActive) return false;
@@ -212,15 +224,56 @@ export function AgentsPage() {
             <option value="inactive">Inactive</option>
           </Select>
         </Field>
-        <Button
-          variant={issuesOnly ? 'primary' : 'secondary'}
-          onClick={() => {
-            setIssuesOnly((value) => !value);
-          }}
-        >
-          Needs attention
-        </Button>
+        <Field label="Data issues" className="w-64">
+          <Select
+            value={issueFilter}
+            onChange={(event) => {
+              setIssueFilter(event.target.value as IssueFilter);
+            }}
+          >
+            {(['all', 'any', ...DATA_ISSUES] as IssueFilter[]).map((option) => (
+              <option key={option} value={option}>
+                {issueFilterLabel(option, issues)}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </div>
+
+      {/* The size of the job, visible without scrolling the table. Counted
+          across every agent, not the filtered rows, so narrowing the filter
+          does not make the backlog look smaller than it is. */}
+      {issues.affected > 0 && (
+        <Alert
+          tone="warning"
+          className="mb-4"
+          title={`${String(issues.affected)} agents need attention before they are invited`}
+        >
+          <p>
+            An agent with no email cannot be invited, and one with a broken Rate My Service link
+            sends every client to an error page — worse than sending none, because the client clicks
+            it.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {DATA_ISSUES.filter((issue) => issues.byIssue[issue] > 0).map((issue) => (
+              <li key={issue}>
+                <button
+                  type="button"
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setIssueFilter(issue);
+                  }}
+                  title={DATA_ISSUE_CONSEQUENCES[issue]}
+                >
+                  <Badge tone={issue === 'needs_email' ? 'danger' : 'warning'}>
+                    {DATA_ISSUE_LABELS[issue]}: {issues.byIssue[issue]}
+                  </Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      )}
 
       {selectedRows.length > 0 && (
         <Alert tone="info" className="mb-4">

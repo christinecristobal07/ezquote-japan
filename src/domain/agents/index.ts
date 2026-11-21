@@ -16,6 +16,18 @@ export {
 } from './validation.ts';
 
 export {
+  summariseDataIssues,
+  matchesIssueFilter,
+  issueFilterLabel,
+  DATA_ISSUES,
+  DATA_ISSUE_LABELS,
+  DATA_ISSUE_CONSEQUENCES,
+  type IssueFilter,
+  type IssueHolder,
+  type IssueSummary,
+} from './issueSummary.ts';
+
+export {
   decideInvite,
   describeAction,
   summariseInvites,
