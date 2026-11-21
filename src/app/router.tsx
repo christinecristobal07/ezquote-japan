@@ -1,4 +1,4 @@
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import type { ReactNode } from 'react';
 import { RequireAuth } from '@/app/guards/RequireAuth';
 import { RequireRole } from '@/app/guards/RequireRole';
@@ -13,10 +13,15 @@ import { RatesListPage } from '@/features/rates/RatesListPage';
 import { ServiceRatePage } from '@/features/rates/ServiceRatePage';
 import { FxPage } from '@/features/rates/FxPage';
 import { MarkupsPage } from '@/features/rates/MarkupsPage';
+import { ContentLayout } from '@/features/content/ContentLayout';
+import { ServicesPage } from '@/features/content/ServicesPage';
+import { HotelsPage } from '@/features/content/HotelsPage';
+import { PackageTextPage } from '@/features/content/PackageTextPage';
+import { ReferencePage } from '@/features/content/ReferencePage';
+import { SettingsPage } from '@/features/content/SettingsPage';
 import {
   AgentsAdminPage,
   AuditPage,
-  ContentAdminPage,
   NewQuotationPage,
   NotFoundPage,
   QuotationsPage,
@@ -89,9 +94,17 @@ const protectedChildren: RouteObject[] = [
     path: 'admin/content',
     element: (
       <Guarded permission="content.manage">
-        <ContentAdminPage />
+        <ContentLayout />
       </Guarded>
     ),
+    children: [
+      { index: true, element: <Navigate to="/admin/content/services" replace /> },
+      { path: 'services', element: <ServicesPage /> },
+      { path: 'hotels', element: <HotelsPage /> },
+      { path: 'text', element: <PackageTextPage /> },
+      { path: 'reference', element: <ReferencePage /> },
+      { path: 'settings', element: <SettingsPage /> },
+    ],
   },
   {
     path: 'admin/agents',

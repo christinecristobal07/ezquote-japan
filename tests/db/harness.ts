@@ -13,6 +13,7 @@ const MIGRATIONS = [
   '20261120100200_rls_policies.sql',
   '20261120110000_grant_api_roles.sql',
   '20261120120000_rate_draft_functions.sql',
+  '20261121100000_content_windows_and_reorder.sql',
 ];
 
 /**

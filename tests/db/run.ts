@@ -774,6 +774,137 @@ async function main(): Promise<void> {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  section('Content windows and reordering');
+
+  const contentIds: string[] = [];
+  await check('content items can carry a start and end date', async () => {
+    const rows = await db.query<{ id: string }>(
+      `insert into public.content_items (content_type, body, sort_order, starts_on, ends_on)
+       values ('exclusion', 'Compulsory tipping (pay on spot)', 10, null, null),
+              ('exclusion', 'Tour tickets and meals', 20, '2026-11-01', '2026-11-30'),
+              ('exclusion', 'Travel Insurance (Mandatory)', 30, '2027-01-01', null)
+       returning id`,
+    );
+    contentIds.push(...rows.rows.map((row) => row.id));
+    assertEqual(contentIds.length, 3, 'inserted rows');
+  });
+
+  await check('an end date before the start date is rejected', async () => {
+    await assertRejects(
+      () =>
+        db.query(
+          `insert into public.content_items (content_type, body, starts_on, ends_on)
+           values ('note', 'Backwards window', '2026-12-31', '2026-01-01')`,
+        ),
+      /content_items_window/,
+    );
+  });
+
+  await check('an open-ended window is allowed either way round', async () => {
+    await db.query(
+      `insert into public.content_items (content_type, body, starts_on, ends_on)
+       values ('note', 'Starts only', '2026-01-01', null), ('note', 'Ends only', null, '2027-01-01')`,
+    );
+    const n = await count(
+      db,
+      `select count(*)::int as n from public.content_items where content_type = 'note'`,
+    );
+    assertEqual(n, 2, 'note rows');
+  });
+
+  await check('an agent cannot reorder content', async () => {
+    await asUser(db, ids.agentAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reorder_content('exclusion', $1::uuid[])`, [
+            [...contentIds].reverse(),
+          ]),
+        /do not have permission|row-level security/i,
+      );
+    });
+  });
+
+  await check('a manager reorders in one step', async () => {
+    const reversed = [...contentIds].reverse();
+    await asUser(
+      db,
+      ids.managerAuth,
+      async () => {
+        await db.query(`select public.reorder_content('exclusion', $1::uuid[])`, [reversed]);
+      },
+      { commit: true },
+    );
+
+    const order = await db.query<{ id: string; sort_order: number }>(
+      `select id, sort_order from public.content_items
+       where content_type = 'exclusion' order by sort_order`,
+    );
+    assertEqual(
+      order.rows.map((row) => row.id),
+      reversed,
+      'order after the reorder',
+    );
+    assertEqual(
+      order.rows.map((row) => row.sort_order),
+      [10, 20, 30],
+      'sort_order values',
+    );
+  });
+
+  await check('a reorder missing an item is refused and changes nothing', async () => {
+    const before = await db.query<{ id: string }>(
+      `select id from public.content_items where content_type = 'exclusion' order by sort_order`,
+    );
+
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reorder_content('exclusion', $1::uuid[])`, [
+            contentIds.slice(0, 2),
+          ]),
+        /needs every/,
+      );
+    });
+
+    const after = await db.query<{ id: string }>(
+      `select id from public.content_items where content_type = 'exclusion' order by sort_order`,
+    );
+    assertEqual(
+      after.rows.map((row) => row.id),
+      before.rows.map((row) => row.id),
+      'order after the refused reorder',
+    );
+  });
+
+  await check('a reorder naming another type is refused', async () => {
+    const note = await one<{ id: string }>(
+      db,
+      `select id from public.content_items where content_type = 'note' limit 1`,
+    );
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reorder_content('exclusion', $1::uuid[])`, [
+            [contentIds[0], contentIds[1], note.id],
+          ]),
+        /are not exclusion content/,
+      );
+    });
+  });
+
+  await check('a reorder naming the same item twice is refused', async () => {
+    await asUser(db, ids.managerAuth, async () => {
+      await assertRejects(
+        () =>
+          db.query(`select public.reorder_content('exclusion', $1::uuid[])`, [
+            [contentIds[0], contentIds[0], contentIds[1]],
+          ]),
+        /more than once/,
+      );
+    });
+  });
+
   await db.close();
   process.exitCode = summary();
 }

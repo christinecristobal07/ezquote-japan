@@ -216,9 +216,11 @@ export type Database = {
           condition_service_id: string | null
           content_type: Database["public"]["Enums"]["content_type"]
           created_at: string
+          ends_on: string | null
           id: string
           is_active: boolean
           sort_order: number
+          starts_on: string | null
           updated_at: string
         }
         Insert: {
@@ -226,9 +228,11 @@ export type Database = {
           condition_service_id?: string | null
           content_type: Database["public"]["Enums"]["content_type"]
           created_at?: string
+          ends_on?: string | null
           id?: string
           is_active?: boolean
           sort_order?: number
+          starts_on?: string | null
           updated_at?: string
         }
         Update: {
@@ -236,9 +240,11 @@ export type Database = {
           condition_service_id?: string | null
           content_type?: Database["public"]["Enums"]["content_type"]
           created_at?: string
+          ends_on?: string | null
           id?: string
           is_active?: boolean
           sort_order?: number
+          starts_on?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1021,6 +1027,13 @@ export type Database = {
       create_rate_draft: {
         Args: { p_from_version_id?: string; p_service_id: string }
         Returns: string
+      }
+      reorder_content: {
+        Args: {
+          p_ids: string[]
+          p_type: Database["public"]["Enums"]["content_type"]
+        }
+        Returns: undefined
       }
       save_rate_draft: {
         Args: {
