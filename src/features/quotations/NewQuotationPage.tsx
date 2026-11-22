@@ -12,10 +12,11 @@ import {
   Select,
   useToast,
 } from '@/components/ui';
-import { citySelectionError, MAX_PAX, MIN_PAX } from '@/domain';
+import { citySelectionError, formatValidityDate, MAX_PAX, MIN_PAX } from '@/domain';
 import { ContentError } from '@/data/repositories/contentRepository';
 import { getQuotation, setCities, setServices } from '@/data/repositories/quotationRepository';
 import { useAppSettings, useCities } from '@/features/content/queries';
+import { useMaxValidUntil } from '@/features/rates/queries';
 import { CitiesField } from './CitiesField';
 import { useCreateQuotation } from './queries';
 
@@ -35,6 +36,7 @@ export function NewQuotationPage() {
   const create = useCreateQuotation();
   const settings = useAppSettings();
   const cities = useCities();
+  const maxValidUntil = useMaxValidUntil();
 
   const [clientName, setClientName] = useState('');
   const [travelDate, setTravelDate] = useState('');
@@ -49,8 +51,15 @@ export function NewQuotationPage() {
     total < MIN_PAX || total > MAX_PAX
       ? `The group must be between ${String(MIN_PAX)} and ${String(MAX_PAX)} travellers.`
       : undefined;
+  const lastSellable = maxValidUntil.data ?? null;
+  const pastValidity = travelDate !== '' && lastSellable !== null && travelDate > lastSellable;
+
   const dateError =
-    travelDate !== '' && travelDate < today ? 'The travel date cannot be in the past.' : undefined;
+    travelDate !== '' && travelDate < today
+      ? 'The travel date cannot be in the past.'
+      : pastValidity
+        ? `Rates only run to ${formatValidityDate(lastSellable) ?? lastSellable}. Ask Product Development to extend them before quoting this date.`
+        : undefined;
   const cityError = citySelectionError(cityIds);
   const canSubmit = paxError === undefined && dateError === undefined && cityError === null;
 
@@ -123,10 +132,19 @@ export function NewQuotationPage() {
             />
           </Field>
 
-          <Field label="Travel date" hint="Optional." error={dateError}>
+          <Field
+            label="Travel date"
+            hint={
+              lastSellable === null
+                ? 'Optional.'
+                : `Optional. Rates currently run to ${formatValidityDate(lastSellable) ?? lastSellable}.`
+            }
+            error={dateError}
+          >
             <Input
               type="date"
               min={today}
+              {...(lastSellable === null ? {} : { max: lastSellable })}
               value={travelDate}
               onChange={(event) => {
                 setTravelDate(event.target.value);

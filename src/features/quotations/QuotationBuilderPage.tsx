@@ -25,6 +25,7 @@ import {
   defaultPackageTitle,
   effectiveAmount,
   filterToCities,
+  formatValidityDate,
   inCityScope,
   outOfCityScope,
   quotationValidity,
@@ -368,6 +369,16 @@ export function QuotationBuilderPage() {
    * quotation whose itinerary quietly left most of them out.
    */
   const blockingReasons: string[] = [];
+  // A travel date past the rates' expiry is not a warning to scroll past: the
+  // operator can and will charge something else, and the quotation would be
+  // one nobody can honour.
+  if (validity.travelDateOutside && validity.validUntil !== null) {
+    blockingReasons.push(
+      `the travel date is after these rates expire on ${
+        formatValidityDate(validity.validUntil) ?? validity.validUntil
+      } — change the date, or ask Product Development to extend the rates`,
+    );
+  }
   if (resolved.warnings.includes('TOURS_DO_NOT_FIT')) {
     blockingReasons.push(
       `these tours need ${String(resolved.requiredDays)} days but the trip is ${resolved.label} \u2014 add days and nights, or remove a tour`,

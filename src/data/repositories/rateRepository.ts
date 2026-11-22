@@ -299,3 +299,32 @@ export async function deleteDraft(versionId: string): Promise<void> {
   const { error } = await supabase.from('service_rate_versions').delete().eq('id', versionId);
   if (error) throw toRateError(error);
 }
+
+/**
+ * The last date anything can be sold for, across every published rate.
+ *
+ * A quotation's own binding date is the earliest expiry among the services on
+ * it, which the builder works out from its snapshot. But the create form has
+ * no services yet, and an agent typing a 2028 travel date there is already
+ * making a quotation nobody can honour. This is the outer bound.
+ *
+ * Returns null when at least one published rate has no stated expiry: there is
+ * then something sellable at any date, so refusing one would be wrong.
+ */
+export async function maxPublishedValidUntil(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('service_rate_versions')
+    .select('valid_until')
+    .eq('status', 'published')
+    .overrideTypes<{ valid_until: string | null }[], { merge: false }>();
+
+  if (error) throw toRateError(error);
+  if (data.length === 0) return null;
+  if (data.some((row) => row.valid_until === null)) return null;
+
+  // yyyy-mm-dd sorts correctly as text.
+  return data.reduce<string>(
+    (latest, row) => ((row.valid_until ?? '') > latest ? (row.valid_until ?? '') : latest),
+    '',
+  );
+}

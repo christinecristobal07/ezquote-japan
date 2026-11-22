@@ -5,6 +5,7 @@ import {
   getVersion,
   listServiceRates,
   listVersionHistory,
+  maxPublishedValidUntil,
   publishVersion,
   saveDraft,
   setInactive,
@@ -164,5 +165,18 @@ export function useInsertServiceMarkup() {
       await client.invalidateQueries({ queryKey: rateKeys.serviceMarkups });
       await client.invalidateQueries({ queryKey: rateKeys.all });
     },
+  });
+}
+
+/**
+ * The last travel date anything published can be sold for, or null when at
+ * least one rate has no stated expiry. Used by the create form to refuse a
+ * trip nobody could honour.
+ */
+export function useMaxValidUntil() {
+  return useQuery({
+    queryKey: ['rates', 'maxValidUntil'],
+    queryFn: maxPublishedValidUntil,
+    staleTime: 5 * 60 * 1000,
   });
 }
