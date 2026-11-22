@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   effectiveAmount,
+  hotelEntryHint,
+  needsEntryWarning,
   nightlyExplanation,
   nightlyToStayTotal,
   staleStayTotals,
@@ -133,5 +135,48 @@ describe('nightlyExplanation', () => {
 
   it('says one night, not 1 nights', () => {
     expect(nightlyExplanation(fromPhp(3_500), 1, fromPhp(3_500))).toContain('1 night =');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Shown BEFORE anything is typed. hotelPerPersonExplanation shows the working
+// afterwards, which is too late for the Solo rule.
+// -----------------------------------------------------------------------------
+describe('hotelEntryHint', () => {
+  it('tells Solo to use the per-person twin rate, and says it doubles', () => {
+    const hint = hotelEntryHint('solo', 1, 2);
+    expect(hint).toContain('per-person TWIN rate');
+    expect(hint).toContain('multiplies it by 2');
+    expect(hint).not.toContain('room cost');
+  });
+
+  it.each([
+    ['quad', 4],
+    ['triple', 3],
+    ['twin', 2],
+  ])('tells %s to use the room cost, divided by %i', (code, divisor) => {
+    const hint = hotelEntryHint(code, divisor, 1);
+    expect(hint).toContain('room cost');
+    expect(hint).toContain(`divides it by ${String(divisor)}`);
+  });
+
+  it.each(['child', 'sneak_in'])('tells %s to use the per-person cost', (code) => {
+    expect(hotelEntryHint(code, 1, 1)).toBe('Enter the cost per person');
+  });
+
+  it('never tells anyone but Solo to multiply', () => {
+    for (const code of ['quad', 'triple', 'twin', 'child', 'sneak_in']) {
+      expect(hotelEntryHint(code, code === 'quad' ? 4 : 1, 1)).not.toContain('multiplies');
+    }
+  });
+});
+
+describe('needsEntryWarning', () => {
+  it('flags Solo, because its rule reads backwards', () => {
+    expect(needsEntryWarning('solo')).toBe(true);
+  });
+
+  it.each(['quad', 'triple', 'twin', 'child', 'sneak_in'])('does not flag %s', (code) => {
+    expect(needsEntryWarning(code)).toBe(false);
   });
 });

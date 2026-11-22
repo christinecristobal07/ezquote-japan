@@ -211,7 +211,11 @@ describe('HotelCostCard', () => {
     expect(screen.getByText('PHP 6,000 per-person twin rate × 2 = PHP 12,000')).toBeInTheDocument();
   });
 
-  it('warns per category until a hotel entry exists', () => {
+  // Before anything is typed the column says what to type, rather than only
+  // reporting that nothing has been. The Solo rule reads backwards, and an
+  // agent finding that out from the explanation under the figure has already
+  // quoted double.
+  it('says what to enter for each category before anything is entered', () => {
     render(
       <HotelCostCard
         snapshot={snapshot}
@@ -221,7 +225,15 @@ describe('HotelCostCard', () => {
         onAdd={vi.fn()}
       />,
     );
-    expect(screen.getAllByText('No hotel cost yet')).toHaveLength(3);
+    expect(
+      screen.getByText('Enter the room cost — the system divides it by 4'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Enter the room cost — the system divides it by 2'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Enter the per-person TWIN rate — the system multiplies it by 2'),
+    ).toBeInTheDocument();
   });
 
   it('hides the add button for a read-only viewer', () => {

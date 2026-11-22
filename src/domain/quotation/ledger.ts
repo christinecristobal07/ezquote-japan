@@ -157,6 +157,29 @@ export function hotelPerPersonExplanation(
   return `${peso(roomTotalPhp)} ÷ ${String(divisor)} × ${String(multiplier)} = ${peso(perPerson)} per person`;
 }
 
+/**
+ * What this category expects the agent to type, shown BEFORE anything is
+ * entered.
+ *
+ * hotelPerPersonExplanation shows the working afterwards, which is too late
+ * for the one that catches people: for Solo you enter the per-person TWIN
+ * rate, not the room, and the system doubles it. An agent who types the room
+ * cost quotes double, and only finds out when they read the explanation under
+ * the figure they have already sent.
+ */
+export function hotelEntryHint(paxCategory: string, divisor: number, multiplier: number): string {
+  if (paxCategory === 'solo') {
+    return `Enter the per-person TWIN rate — the system multiplies it by ${String(multiplier)}`;
+  }
+  if (divisor === 1) return 'Enter the cost per person';
+  return `Enter the room cost — the system divides it by ${String(divisor)}`;
+}
+
+/** True for the category whose rule reads backwards, so the UI can flag it. */
+export function needsEntryWarning(paxCategory: string): boolean {
+  return paxCategory === 'solo';
+}
+
 /** "Rate per night × nights" entry mode. */
 export function nightlyToStayTotal(perNight: number, nights: number): number {
   if (!Number.isFinite(perNight) || !Number.isFinite(nights)) return 0;

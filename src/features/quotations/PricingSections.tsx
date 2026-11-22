@@ -18,7 +18,9 @@ import {
   calculateQuotation,
   emptyCategoryLedger,
   formatPhp,
+  hotelEntryHint,
   hotelPerPersonExplanation,
+  needsEntryWarning,
   nightlyToStayTotal,
   scaleBy,
   validateAdjustmentInput,
@@ -131,7 +133,13 @@ export function HotelCostCard({
                         category.hotelMultiplier,
                       )
                     ) : (
-                      <Badge tone="warning">No hotel cost yet</Badge>
+                      <span
+                        className={
+                          needsEntryWarning(code) ? 'font-medium text-amber-700' : undefined
+                        }
+                      >
+                        {hotelEntryHint(code, category.hotelDivisor, category.hotelMultiplier)}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -242,6 +250,26 @@ export function AdjustmentForm({
             ))}
           </Select>
         </Field>
+      )}
+
+      {/* The rule for whichever categories are about to be saved, stated before
+          the amount is typed. Solo reads backwards and is the one that costs
+          money when it is got wrong. */}
+      {mode === 'hotel' && (
+        <Alert tone={chosen.some(needsEntryWarning) ? 'warning' : 'info'}>
+          <ul className="space-y-0.5">
+            {chosen.map((code) => {
+              const meta = snapshot.categoryByCode.get(code);
+              if (meta === undefined) return null;
+              return (
+                <li key={code} className={needsEntryWarning(code) ? 'font-medium' : undefined}>
+                  <strong>{meta.label}:</strong>{' '}
+                  {hotelEntryHint(code, meta.hotelDivisor, meta.hotelMultiplier)}
+                </li>
+              );
+            })}
+          </ul>
+        </Alert>
       )}
 
       {mode === 'hotel' && (
