@@ -20,6 +20,7 @@ import {
   buildQuotationModel,
   defaultPackageTitle,
   effectiveAmount,
+  filterToCities,
   ledgerView,
   outputFingerprint,
   quotationValidity,
@@ -219,9 +220,14 @@ export function OutputPage() {
       durationLabel: resolved.label,
       hotelCategory: header.hotelCategory ?? 3,
       selectedHotels,
-      categoryHotels: (hotels.data ?? [])
-        .filter((hotel) => hotel.isActive)
-        .map((hotel) => ({ name: hotel.name, starRating: hotel.starRating })),
+      // Filtered to the quotation's cities, exactly as the picker is. Without
+      // this the fallback listed every hotel of that star rating, so a
+      // Tokyo-only package printed a list of Osaka hotels the agent was never
+      // shown and never chose.
+      categoryHotels: filterToCities(
+        (hotels.data ?? []).filter((hotel) => hotel.isActive),
+        quotation.data?.cityIds ?? [],
+      ).map((hotel) => ({ name: hotel.name, starRating: hotel.starRating })),
       services: selected.map((row) => {
         const snap = snapshot.serviceById.get(row.serviceId);
         const meta = serviceMeta.data?.find((entry) => entry.id === row.serviceId);

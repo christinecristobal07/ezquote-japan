@@ -140,6 +140,27 @@ export function QuotationBuilderPage() {
     ),
   );
 
+  /**
+   * Airfare and the package markup used to save on every keystroke, each call
+   * carrying the updated_at captured when the component rendered. Typing three
+   * characters fired three writes, the second and third with a timestamp the
+   * first had already superseded, and the optimistic-concurrency check
+   * rejected them: "This quotation changed in another tab. Reload." three
+   * times, with nothing else open.
+   *
+   * Debounced like the rest of the builder, so one pause means one write with
+   * a current timestamp.
+   */
+  const pricingSave = useAutosave<Parameters<typeof updatePricing.mutateAsync>[0]['patch']>(
+    useCallback(
+      (patch) => {
+        if (header === null) return Promise.resolve();
+        return updatePricing.mutateAsync({ updatedAt: header.updatedAt, patch });
+      },
+      [header, updatePricing],
+    ),
+  );
+
   const readOnly =
     profile === null ||
     header === null ||
@@ -350,12 +371,12 @@ export function QuotationBuilderPage() {
       .filter((value): value is string => value !== null),
   );
   const customHotels = quotation.data.hotels.filter((row) => row.customName !== null);
-  const categoryHotels = filterToCities(
-    (hotels.data ?? []).filter(
-      (hotel) => hotel.isActive && hotel.starRating === header.hotelCategory,
-    ),
-    cityIds,
+  // Split in two, so an empty picker can say WHICH filter emptied it: no
+  // hotels at this star rating at all, or none of them in the chosen cities.
+  const starRatingHotels = (hotels.data ?? []).filter(
+    (hotel) => hotel.isActive && hotel.starRating === header.hotelCategory,
   );
+  const categoryHotels = filterToCities(starRatingHotels, cityIds);
 
   const chosenReferenceHotels = (hotels.data ?? []).filter((hotel) => chosenHotelIds.has(hotel.id));
   const hotelsOutOfScope = outOfCityScope(chosenReferenceHotels, cityIds);
@@ -581,6 +602,18 @@ export function QuotationBuilderPage() {
                 </Select>
               </Field>
 
+              {categoryHotels.length === 0 && (
+                <Alert tone="warning">
+                  {starRatingHotels.length === 0
+                    ? `No ${String(header.hotelCategory ?? 3)}-star hotels have been set up yet. A manager adds these under Content, or type one in below.`
+                    : `None of the ${String(header.hotelCategory ?? 3)}-star hotels are in ${
+                        selectedCityNames.length > 0
+                          ? selectedCityNames.join(' or ')
+                          : 'the chosen cities'
+                      }. Add the right city above, ask a manager to add a hotel for it under Content, or type one in below.`}
+                </Alert>
+              )}
+
               <ul className="space-y-1">
                 {categoryHotels.map((hotel) => (
                   <li key={hotel.id}>
@@ -751,17 +784,11 @@ export function QuotationBuilderPage() {
             markupValue={header.packageMarkupValue}
             readOnly={readOnly}
             onChange={(airfarePhp, markupType, markupValue) => {
-              updatePricing.mutate(
-                {
-                  updatedAt: header.updatedAt,
-                  patch: {
-                    airfarePhp,
-                    packageMarkupType: markupType,
-                    packageMarkupValue: markupValue,
-                  },
-                },
-                { onError: reportError },
-              );
+              pricingSave.push({
+                airfarePhp,
+                packageMarkupType: markupType,
+                packageMarkupValue: markupValue,
+              });
             }}
           />
 
